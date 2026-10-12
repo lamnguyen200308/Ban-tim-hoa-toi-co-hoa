@@ -33,6 +33,14 @@ npm run dev                   # http://localhost:3000
    - Site URL: `https://<tên-miền-vercel-của-bạn>`
    - Redirect URLs: thêm `http://localhost:3000/auth/callback` và `https://<tên-miền>/auth/callback`
 5. (Tuỳ chọn, khi thử nghiệm) **Authentication → Providers → Email**: tắt *Confirm email* để đăng ký xong vào được ngay.
+6. **Sửa link trong email xác nhận** để mở được trên mọi trình duyệt / điện thoại: **Authentication → Emails → Confirm signup**, thay link trong template bằng:
+   ```html
+   <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email">Xác nhận email</a>
+   ```
+   (Link mặc định chỉ chạy trên đúng trình duyệt đã bấm đăng ký, nên mở từ app Gmail trên điện thoại sẽ báo lỗi.)
+
+### Dữ liệu mẫu để thử
+Chạy `supabase/demo_data.sql` trong SQL Editor: tạo 2 khách, 1 shop (đã xác nhận email, mật khẩu `Demo@12345`) và 20 đơn hoa. Đăng nhập bằng `khach1@demo.test`, `khach2@demo.test` hoặc `shop1@demo.test`. Đơn *“Tulip vàng tặng mẹ”* của khách 1 đã chốt shop để thử QR. Cuối file có lệnh xoá dữ liệu mẫu.
 
 ### Thanh toán mở thông tin & giới hạn xem đơn
 Sửa trong bảng `app_settings` (1 dòng):

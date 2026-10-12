@@ -20,7 +20,8 @@ export default function AuthForm() {
   const [shopName, setShopName] = useState('');
   const [district, setDistrict] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Lỗi từ trang xác nhận email (/auth/callback) được chuyển về qua ?error=
+  const [error, setError] = useState<string | null>(params.get('error'));
   const [info, setInfo] = useState<string | null>(null);
 
   if (!supabaseConfigured) return <NotConfigured />;
