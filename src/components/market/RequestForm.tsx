@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import NotConfigured from '@/components/NotConfigured';
 import DesignCard, { describeDesign } from '@/components/market/DesignCard';
+import { CONTACT_WARNING, containsContact } from '@/lib/contact';
 import { errMsg } from '@/lib/format';
 import { createClient, supabaseConfigured } from '@/lib/supabase/client';
 import { useProfile } from '@/lib/useProfile';
@@ -80,6 +81,10 @@ export default function RequestForm() {
     }
     const min = form.budget_min ? Math.round(Number(form.budget_min)) : null;
     const max = form.budget_max ? Math.round(Number(form.budget_max)) : null;
+    if (containsContact(form.title, form.description)) {
+      setError(CONTACT_WARNING);
+      return;
+    }
     if (min !== null && max !== null && min > max) {
       setError('Ngân sách tối thiểu đang lớn hơn tối đa.');
       return;
@@ -120,7 +125,7 @@ export default function RequestForm() {
     }
   };
 
-  if (loading) return <p className="p-10 text-center text-stone-500">Đang tải…</p>;
+  if (loading) return <p className="p-10 text-center text-slate-500">Đang tải…</p>;
 
   if (!user) {
     const next = '/cho-hoa/dang-yeu-cau' + (designId ? `?design=${designId}` : '');
@@ -129,9 +134,14 @@ export default function RequestForm() {
         <div className="card p-6 text-center">
           <p className="text-4xl" aria-hidden>🔐</p>
           <h1 className="mt-2 text-xl font-bold">Đăng nhập để đăng yêu cầu</h1>
-          <p className="mt-1 text-sm text-stone-600">Các shop cần biết ai đang tìm hoa để báo giá cho bạn.</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Khi chưa đăng nhập, bạn chỉ có thể thiết kế bó hoa và lưu mẫu trên máy này.
+          </p>
           <Link href={`/dang-nhap?next=${encodeURIComponent(next)}`} className="btn-primary mt-5">
             Đăng nhập / Đăng ký
+          </Link>
+          <Link href="/thiet-ke" className="btn-outline mt-3 ml-2">
+            🎨 Tiếp tục thiết kế
           </Link>
         </div>
       </div>
@@ -140,8 +150,8 @@ export default function RequestForm() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="text-3xl font-extrabold text-stone-800">Đăng yêu cầu bó hoa</h1>
-      <p className="mt-1 text-stone-600">Mô tả càng rõ, báo giá càng sát. Các shop sẽ cạnh tranh để có giá tốt nhất cho bạn.</p>
+      <h1 className="text-3xl font-extrabold text-slate-800">Đăng yêu cầu bó hoa</h1>
+      <p className="mt-1 text-slate-600">Mô tả càng rõ, báo giá càng sát. Các shop sẽ cạnh tranh để có giá tốt nhất cho bạn.</p>
 
       <form onSubmit={onSubmit} className="card mt-6 space-y-5 p-6">
         {design && <DesignCard design={design} />}
@@ -169,19 +179,19 @@ export default function RequestForm() {
             {previews.map((src, i) => (
               <div key={src} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt="" className="h-24 w-24 rounded-xl object-cover ring-1 ring-rose-100" />
+                <img src={src} alt="" className="h-24 w-24 rounded-xl object-cover ring-1 ring-blue-100" />
                 <button
                   type="button"
                   aria-label="Bỏ ảnh"
                   onClick={() => setFiles((f) => f.filter((_, j) => j !== i))}
-                  className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-stone-800 text-xs text-white"
+                  className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-slate-800 text-xs text-white"
                 >
                   ✕
                 </button>
               </div>
             ))}
             {files.length < MAX_FILES && (
-              <label className="grid h-24 w-24 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-rose-200 text-center text-xs text-stone-500 hover:border-rose-400">
+              <label className="grid h-24 w-24 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-blue-200 text-center text-xs text-slate-500 hover:border-blue-400">
                 <span>📷<br />Thêm ảnh</span>
                 <input type="file" accept="image/*" multiple className="hidden" onChange={onFiles} />
               </label>

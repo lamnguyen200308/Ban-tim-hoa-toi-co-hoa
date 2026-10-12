@@ -72,13 +72,13 @@ export default function AuthForm() {
   return (
     <div className="mx-auto max-w-md px-4 py-12">
       <div className="card p-6">
-        <div className="mb-6 flex rounded-full bg-rose-50 p-1">
+        <div className="mb-6 flex rounded-full bg-blue-50 p-1">
           {(['login', 'signup'] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMode(m)}
-              className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${mode === m ? 'bg-white text-rose-700 shadow-sm' : 'text-stone-500'}`}
+              className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${mode === m ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}
             >
               {m === 'login' ? 'Đăng nhập' : 'Đăng ký'}
             </button>
@@ -98,7 +98,7 @@ export default function AuthForm() {
                   key={r}
                   type="button"
                   onClick={() => setRole(r)}
-                  className={`rounded-xl border p-3 text-sm font-semibold transition ${role === r ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-rose-100 text-stone-600'}`}
+                  className={`rounded-xl border p-3 text-sm font-semibold transition ${role === r ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-blue-100 text-slate-600'}`}
                 >
                   <span className="block text-2xl" aria-hidden>{icon}</span>
                   {label}

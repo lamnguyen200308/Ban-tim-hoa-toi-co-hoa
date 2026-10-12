@@ -18,7 +18,7 @@ const GROUP_Y = 0.25; // bó hoa được đặt cao hơn gốc toạ độ mộ
 const HEAD_MIN_Y = 0.3;
 const HEAD_MAX_Y = 1.45;
 const HALO_GEO = new THREE.TorusGeometry(0.27, 0.014, 8, 40);
-const HALO_MAT = new THREE.MeshBasicMaterial({ color: '#e11d48', transparent: true, opacity: 0.9, depthTest: false });
+const HALO_MAT = new THREE.MeshBasicMaterial({ color: '#2563eb', transparent: true, opacity: 0.9, depthTest: false });
 const HIT_GEO = new THREE.SphereGeometry(0.22, 10, 8);
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 
@@ -198,9 +198,9 @@ export default function BouquetCanvas({
       onCreated={({ gl }) => onCanvas(gl.domElement)}
       onPointerMissed={() => onSelect(null)}
     >
-      <color attach="background" args={['#fffaf6']} />
+      <color attach="background" args={['#eef3f9']} />
       <ambientLight intensity={0.55} />
-      <hemisphereLight args={['#ffffff', '#f2d4c9', 0.7]} />
+      <hemisphereLight args={['#ffffff', '#cfdcea', 0.7]} />
       <directionalLight position={[3, 6, 4]} intensity={1.3} castShadow shadow-mapSize={[1024, 1024]} />
       <directionalLight position={[-4, 2, -3]} intensity={0.4} />
 

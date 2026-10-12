@@ -1,23 +1,23 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { LOCAL_CATALOGUE, RIBBON_COLOURS, loadCatalogue } from '@/lib/catalogue';
 import { MAX_STEMS, computePrice } from '@/lib/pricing';
 import { errMsg, formatVnd } from '@/lib/format';
+import { DRAFT_KEY, addLocalDesign, thumbnailFrom, type Draft } from '@/lib/localDesigns';
 import { createClient, supabaseConfigured } from '@/lib/supabase/client';
+import { useProfile } from '@/lib/useProfile';
 import type { BouquetItem, Catalogue, Flower, FlowerPositions, HeadPos } from '@/lib/types';
 
 const BouquetCanvas = dynamic(() => import('./BouquetCanvas'), {
   ssr: false,
-  loading: () => <div className="grid h-full place-items-center text-stone-400">Đang dựng khung 3D…</div>,
+  loading: () => <div className="grid h-full place-items-center text-slate-400">Đang dựng khung 3D…</div>,
 });
 
-const DRAFT_KEY = 'btht-draft-v1';
 const DRAG_PREFIX = 'flower:';
-
-type Draft = { items: BouquetItem[]; wrapperId: string; styleId: string; ribbon: string; positions?: FlowerPositions };
 
 const NUDGE = 0.06;
 
@@ -46,7 +46,7 @@ function FlowerSwatch({ flower }: { flower: Flower }) {
   return (
     <span
       aria-hidden
-      className="h-9 w-9 shrink-0 rounded-full ring-1 ring-stone-200"
+      className="h-9 w-9 shrink-0 rounded-full ring-1 ring-slate-200"
       style={{ background: `radial-gradient(circle at 50% 50%, ${flower.accent_color} 0 26%, ${flower.color} 30% 100%)` }}
     />
   );
@@ -54,6 +54,7 @@ function FlowerSwatch({ flower }: { flower: Flower }) {
 
 export default function Customiser() {
   const router = useRouter();
+  const { user: signedIn } = useProfile();
   const [catalogue, setCatalogue] = useState<Catalogue>(LOCAL_CATALOGUE);
   const [source, setSource] = useState<'local' | 'supabase'>('local');
   const [items, setItems] = useState<BouquetItem[]>([]);
@@ -196,6 +197,25 @@ export default function Customiser() {
     a.click();
   };
 
+  /** Khách chưa đăng nhập: lưu mẫu ngay trên trình duyệt này. */
+  async function saveLocal() {
+    await hideSelection();
+    const top = [...price.lines].sort((a, b) => b.qty - a.qty)[0];
+    try {
+      addLocalDesign({
+        name: `${top.label} ${price.stems} cành`,
+        total: price.total,
+        stems: price.stems,
+        lines: price.lines.map((l) => ({ label: l.label, qty: l.qty })),
+        thumb: thumbnailFrom(canvasEl.current),
+        draft: { items, wrapperId, styleId, ribbon, positions },
+      });
+      setNotice('Đã lưu mẫu trên máy này 💾 — xem ở tab “Mẫu đã lưu”. Đăng nhập để lưu vào tài khoản và đăng lên Chợ hoa.');
+    } catch {
+      setNotice('Trình duyệt không cho lưu (bộ nhớ đầy hoặc đang ở chế độ ẩn danh). Bạn vẫn có thể tải ảnh bó hoa.');
+    }
+  }
+
   async function saveDesign(thenPost: boolean) {
     setNotice(null);
     if (!price.lines.length) {
@@ -203,7 +223,8 @@ export default function Customiser() {
       return;
     }
     if (!supabaseConfigured) {
-      setNotice('Chưa kết nối Supabase (xem README). Bạn vẫn có thể tải ảnh bó hoa.');
+      if (!thenPost) return saveLocal();
+      setNotice('Chưa kết nối Supabase (xem README). Bạn vẫn có thể lưu mẫu và tải ảnh bó hoa.');
       return;
     }
     setBusy(true);
@@ -213,7 +234,9 @@ export default function Customiser() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.push('/dang-nhap?next=/thiet-ke');
+        // Chưa đăng nhập: chỉ được thiết kế và lưu mẫu trên máy
+        if (thenPost) router.push('/dang-nhap?next=/thiet-ke');
+        else await saveLocal();
         return;
       }
 
@@ -258,8 +281,8 @@ export default function Customiser() {
     <div className="mx-auto max-w-7xl px-4 py-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-stone-800 sm:text-3xl">Thiết kế bó hoa của bạn</h1>
-          <p className="text-sm text-stone-500">
+          <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Thiết kế bó hoa của bạn</h1>
+          <p className="text-sm text-slate-500">
             Kéo hoa vào khung 3D (hoặc bấm +), kéo nền để xoay ngắm mọi góc. Bấm vào một bông rồi kéo để đổi vị trí.
             Giá cập nhật ngay khi bạn thay đổi.
           </p>
@@ -280,18 +303,18 @@ export default function Customiser() {
                   e.dataTransfer.setData('text/plain', DRAG_PREFIX + f.id);
                   e.dataTransfer.effectAllowed = 'copy';
                 }}
-                className="flex cursor-grab items-center gap-2 rounded-xl border border-rose-100 bg-white p-2 transition hover:border-rose-300 active:cursor-grabbing"
+                className="flex cursor-grab items-center gap-2 rounded-xl border border-blue-100 bg-white p-2 transition hover:border-blue-300 active:cursor-grabbing"
               >
                 <FlowerSwatch flower={f} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{f.name}</p>
-                  <p className="text-xs text-stone-500">{formatVnd(f.price)}/cành</p>
+                  <p className="text-xs text-slate-500">{formatVnd(f.price)}/cành</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => addFlower(f.id)}
                   aria-label={`Thêm ${f.name}`}
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-rose-50 font-bold text-rose-700 transition hover:bg-rose-600 hover:text-white"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-blue-50 font-bold text-blue-700 transition hover:bg-blue-600 hover:text-white"
                 >
                   +
                 </button>
@@ -302,7 +325,7 @@ export default function Customiser() {
 
         {/* Khung 3D */}
         <section
-          className={`card relative h-[460px] overflow-hidden sm:h-[560px] lg:h-[640px] ${dragOver ? 'ring-4 ring-rose-300' : ''}`}
+          className={`card relative h-[460px] overflow-hidden sm:h-[560px] lg:h-[640px] ${dragOver ? 'ring-4 ring-blue-300' : ''}`}
           onDragOver={(e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
@@ -332,8 +355,8 @@ export default function Customiser() {
             }}
           />
           {selected && selectedFlower && (
-            <div className="absolute inset-x-3 top-3 flex flex-wrap items-center gap-2 rounded-2xl bg-white/95 p-2 text-xs shadow-sm ring-1 ring-rose-100">
-              <span className="px-1 font-semibold text-stone-700">
+            <div className="absolute inset-x-3 top-3 flex flex-wrap items-center gap-2 rounded-2xl bg-white/95 p-2 text-xs shadow-sm ring-1 ring-blue-100">
+              <span className="px-1 font-semibold text-slate-700">
                 ✋ {selectedFlower.name} — kéo để di chuyển
               </span>
               <span className="flex-1" />
@@ -364,17 +387,17 @@ export default function Customiser() {
             </div>
           )}
           {dragOver && (
-            <div className="pointer-events-none absolute inset-0 grid place-items-center bg-rose-50/60 text-lg font-bold text-rose-700">
+            <div className="pointer-events-none absolute inset-0 grid place-items-center bg-blue-50/60 text-lg font-bold text-blue-700">
               Thả vào để thêm hoa 🌷
             </div>
           )}
           {items.length > 0 && !selected && !dragOver && (
-            <div className="pointer-events-none absolute inset-x-0 top-3 text-center text-xs text-stone-400">
+            <div className="pointer-events-none absolute inset-x-0 top-3 text-center text-xs text-slate-400">
               Mẹo: bấm vào một bông hoa để chọn và kéo đổi vị trí
             </div>
           )}
           {!items.length && !dragOver && (
-            <div className="pointer-events-none absolute inset-x-0 top-6 text-center text-sm text-stone-500">
+            <div className="pointer-events-none absolute inset-x-0 top-6 text-center text-sm text-slate-500">
               Bó hoa đang trống — kéo một bông hoa vào đây
             </div>
           )}
@@ -398,7 +421,7 @@ export default function Customiser() {
               </button>
             )}
           </div>
-          <div className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1 text-xs text-stone-500 ring-1 ring-rose-100">
+          <div className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1 text-xs text-slate-500 ring-1 ring-blue-100">
             {price.stems}/{MAX_STEMS} cành
           </div>
         </section>
@@ -415,7 +438,7 @@ export default function Customiser() {
                     key={w.id}
                     onClick={() => setWrapperId(w.id)}
                     className={`rounded-xl border p-2 text-left transition ${
-                      price.wrapper?.id === w.id ? 'border-rose-500 ring-2 ring-rose-200' : 'border-rose-100 hover:border-rose-300'
+                      price.wrapper?.id === w.id ? 'border-blue-500 ring-2 ring-blue-200' : 'border-blue-100 hover:border-blue-300'
                     }`}
                   >
                     <span
@@ -423,7 +446,7 @@ export default function Customiser() {
                       style={{ background: w.color, opacity: Math.max(w.opacity, 0.5) }}
                     />
                     <span className="block text-[11px] font-medium leading-tight">{w.name}</span>
-                    <span className="block text-[11px] text-stone-500">{formatVnd(w.price)}/tờ</span>
+                    <span className="block text-[11px] text-slate-500">{formatVnd(w.price)}/tờ</span>
                   </button>
                 ))}
               </div>
@@ -438,14 +461,14 @@ export default function Customiser() {
                     key={s.id}
                     onClick={() => setStyleId(s.id)}
                     className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition ${
-                      price.style?.id === s.id ? 'border-rose-500 bg-rose-50/60 ring-2 ring-rose-200' : 'border-rose-100 hover:border-rose-300'
+                      price.style?.id === s.id ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-200' : 'border-blue-100 hover:border-blue-300'
                     }`}
                   >
                     <span>
                       <span className="block text-sm font-semibold">{s.name}</span>
-                      {s.description && <span className="block text-xs text-stone-500">{s.description}</span>}
+                      {s.description && <span className="block text-xs text-slate-500">{s.description}</span>}
                     </span>
-                    <span className="shrink-0 text-xs font-semibold text-rose-700">+{formatVnd(s.fee)}</span>
+                    <span className="shrink-0 text-xs font-semibold text-blue-700">+{formatVnd(s.fee)}</span>
                   </button>
                 ))}
               </div>
@@ -461,7 +484,7 @@ export default function Customiser() {
                     title={c.name}
                     aria-label={c.name}
                     onClick={() => setRibbon(c.value)}
-                    className={`h-7 w-7 rounded-full ring-2 ring-offset-2 transition ${ribbon === c.value ? 'ring-rose-500' : 'ring-transparent'}`}
+                    className={`h-7 w-7 rounded-full ring-2 ring-offset-2 transition ${ribbon === c.value ? 'ring-blue-500' : 'ring-transparent'}`}
                     style={{ background: c.value, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.15)' }}
                   />
                 ))}
@@ -473,7 +496,7 @@ export default function Customiser() {
             <div className="flex items-center justify-between">
               <h3 className="panel-title !mb-0">Bó hoa của bạn</h3>
               {items.length > 0 && (
-                <button type="button" className="text-xs text-stone-500 hover:text-rose-700" onClick={() => {
+                <button type="button" className="text-xs text-slate-500 hover:text-blue-700" onClick={() => {
                     setItems([]);
                     setPositions({});
                     setSelected(null);
@@ -485,9 +508,9 @@ export default function Customiser() {
             </div>
 
             {price.lines.length === 0 ? (
-              <p className="mt-2 text-sm text-stone-500">Chưa có hoa nào.</p>
+              <p className="mt-2 text-sm text-slate-500">Chưa có hoa nào.</p>
             ) : (
-              <ul className="mt-2 divide-y divide-rose-50">
+              <ul className="mt-2 divide-y divide-blue-50">
                 {price.lines.map((l) => (
                   <li key={l.id} className="flex items-center gap-2 py-2 text-sm">
                     <span className="min-w-0 flex-1 truncate">{l.label}</span>
@@ -496,7 +519,7 @@ export default function Customiser() {
                         type="button"
                         aria-label={`Bớt ${l.label}`}
                         onClick={() => changeQty(l.id, -1)}
-                        className="grid h-6 w-6 place-items-center rounded-full bg-rose-50 text-rose-700 hover:bg-rose-100"
+                        className="grid h-6 w-6 place-items-center rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100"
                       >
                         −
                       </button>
@@ -505,7 +528,7 @@ export default function Customiser() {
                         type="button"
                         aria-label={`Thêm ${l.label}`}
                         onClick={() => changeQty(l.id, 1)}
-                        className="grid h-6 w-6 place-items-center rounded-full bg-rose-50 text-rose-700 hover:bg-rose-100"
+                        className="grid h-6 w-6 place-items-center rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100"
                       >
                         +
                       </button>
@@ -516,30 +539,30 @@ export default function Customiser() {
               </ul>
             )}
 
-            <dl className="mt-3 space-y-1 border-t border-dashed border-rose-200 pt-3 text-sm">
+            <dl className="mt-3 space-y-1 border-t border-dashed border-blue-200 pt-3 text-sm">
               <div className="flex justify-between">
-                <dt className="text-stone-600">Hoa ({price.stems} cành)</dt>
+                <dt className="text-slate-600">Hoa ({price.stems} cành)</dt>
                 <dd className="tabular-nums">{formatVnd(price.flowersTotal)}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-stone-600">
+                <dt className="text-slate-600">
                   {price.wrapper?.name ?? 'Giấy gói'} × {price.sheets} tờ
                 </dt>
                 <dd className="tabular-nums">{formatVnd(price.wrapperTotal)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-stone-600">Công gói ({price.style?.name})</dt>
+                <dt className="text-slate-600">Công gói ({price.style?.name})</dt>
                 <dd className="tabular-nums">{formatVnd(price.styleFee)}</dd>
               </div>
             </dl>
 
             <div className="mt-3 flex items-end justify-between">
-              <span className="text-sm font-semibold text-stone-600">Tổng tạm tính</span>
-              <span key={price.total} className="inline-block animate-pop text-2xl font-extrabold tabular-nums text-rose-700">
+              <span className="text-sm font-semibold text-slate-600">Tổng tạm tính</span>
+              <span key={price.total} className="inline-block animate-pop text-2xl font-extrabold tabular-nums text-blue-700">
                 {formatVnd(price.total)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-stone-400">
+            <p className="mt-1 text-[11px] text-slate-400">
               Giá tham khảo. Đăng lên Chợ hoa để các shop cạnh tranh báo giá tốt hơn.
             </p>
 
@@ -548,10 +571,18 @@ export default function Customiser() {
                 🛎️ Đăng lên Chợ hoa để nhận báo giá
               </button>
               <button type="button" className="btn-outline" disabled={busy} onClick={() => saveDesign(false)}>
-                💾 Lưu thiết kế
+                💾 {signedIn ? 'Lưu thiết kế vào tài khoản' : 'Lưu mẫu (trên máy này)'}
               </button>
+              {!signedIn && (
+                <p className="text-center text-[11px] text-slate-500">
+                  Chưa đăng nhập: bạn có thể thiết kế và lưu mẫu.{' '}
+                  <Link href="/mau-da-luu" className="font-semibold text-blue-700 underline">
+                    Xem mẫu đã lưu
+                  </Link>
+                </p>
+              )}
             </div>
-            {notice && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{notice}</p>}
+            {notice && <p className="mt-3 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-800">{notice}</p>}
           </div>
         </aside>
       </div>

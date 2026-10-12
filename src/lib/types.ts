@@ -69,6 +69,31 @@ export type Shop = {
   rating: number | null;
 };
 
+/** Phần thông tin shop ai cũng thấy (shop ẩn danh). */
+export type PublicShop = Pick<Shop, 'id' | 'district' | 'city' | 'rating'>;
+
+export type ContactUnlock = {
+  id: string;
+  request_id: string;
+  viewer_id: string;
+  viewer_role: Role;
+  amount: number;
+  payment_ref: string;
+  status: 'pending' | 'paid';
+  created_at: string;
+  paid_at: string | null;
+};
+
+/** Thông tin bên kia — chỉ trả về sau khi đã thanh toán. */
+export type Counterpart = {
+  role: 'shop' | 'customer';
+  name: string | null;
+  phone: string | null;
+  address: string | null;
+  district: string | null;
+  city: string | null;
+};
+
 export type RequestStatus = 'open' | 'accepted' | 'closed';
 
 export type FlowerRequest = {
@@ -105,7 +130,8 @@ export type Bid = {
   status: BidStatus;
   created_at: string;
   updated_at: string;
-  shop?: Pick<Shop, 'id' | 'name' | 'district' | 'city' | 'phone' | 'address' | 'rating'> | null;
+  /** Chỉ các cột công khai — tên, SĐT, địa chỉ shop bị ẩn cho tới khi thanh toán. */
+  shop?: PublicShop | null;
 };
 
 export type DesignLine = { flowerId: string; name: string; qty: number; price: number };

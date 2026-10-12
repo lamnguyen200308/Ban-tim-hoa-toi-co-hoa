@@ -5,12 +5,14 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import NotConfigured from '@/components/NotConfigured';
 import BidForm from '@/components/market/BidForm';
+import ContactUnlock from '@/components/payment/ContactUnlock';
 import DesignCard from '@/components/market/DesignCard';
 import { BidStatusBadge, RequestStatusBadge } from '@/components/market/StatusBadge';
+import { anonShopLabel } from '@/lib/contact';
 import { budgetText, errMsg, formatDate, formatVnd, timeAgo } from '@/lib/format';
 import { createClient, supabaseConfigured } from '@/lib/supabase/client';
 import { useProfile } from '@/lib/useProfile';
-import type { Bid, BouquetDesign, FlowerRequest, Profile } from '@/lib/types';
+import type { Bid, BouquetDesign, FlowerRequest } from '@/lib/types';
 
 export default function RequestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,7 +20,6 @@ export default function RequestDetailPage() {
   const [req, setReq] = useState<FlowerRequest | null>(null);
   const [design, setDesign] = useState<BouquetDesign | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
-  const [customer, setCustomer] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -28,28 +29,25 @@ export default function RequestDetailPage() {
     const supabase = createClient();
     const { data: r, error: rErr } = await supabase.from('requests').select('*').eq('id', id).maybeSingle();
     if (rErr || !r) {
-      setError('Không tìm thấy yêu cầu này.');
+      setError('Không tìm thấy yêu cầu này, hoặc bạn đã xem hết số đơn được phép.');
       setLoading(false);
       return;
     }
     const request = r as FlowerRequest;
     setReq(request);
 
-    const [{ data: b }, d, c] = await Promise.all([
+    const [{ data: b }, d] = await Promise.all([
       supabase
         .from('bids')
-        .select('*, shop:shops(id, name, district, city, phone, address, rating)')
+        .select('*, shop:shops(id, district, city, rating)')
         .eq('request_id', id)
         .order('price', { ascending: true }),
       request.design_id
         ? supabase.from('bouquet_designs').select('*').eq('id', request.design_id).maybeSingle()
         : Promise.resolve({ data: null }),
-      // RLS chỉ trả về khi bạn là chủ yêu cầu, hoặc là shop đã được chấp nhận
-      supabase.from('profiles').select('id, role, display_name, phone').eq('id', request.customer_id).maybeSingle(),
     ]);
     setBids((b ?? []) as Bid[]);
     setDesign((d.data as BouquetDesign | null) ?? null);
-    setCustomer((c.data as Profile | null) ?? null);
     setLoading(false);
   }, [id]);
 
@@ -71,12 +69,20 @@ export default function RequestDetailPage() {
   }, [id, load, user?.id]);
 
   if (!supabaseConfigured) return <NotConfigured />;
-  if (loading) return <p className="p-10 text-center text-stone-500">Đang tải…</p>;
+  if (loading) return <p className="p-10 text-center text-slate-500">Đang tải…</p>;
   if (error || !req)
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
-        <p className="text-stone-600">{error}</p>
-        <Link href="/cho-hoa" className="btn-outline mt-4">← Về Chợ hoa</Link>
+        <p className="text-4xl" aria-hidden>🔒</p>
+        <p className="mt-2 text-slate-600">{error}</p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Link href="/cho-hoa" className="btn-outline">← Về Chợ hoa</Link>
+          {!user && (
+            <Link href={`/dang-nhap?next=${encodeURIComponent(`/cho-hoa/${id}`)}`} className="btn-primary">
+              Đăng nhập để xem thêm 10 đơn
+            </Link>
+          )}
+        </div>
       </div>
     );
 
@@ -86,9 +92,17 @@ export default function RequestDetailPage() {
   const activeBids = bids.filter((b) => b.status === 'pending' || b.status === 'accepted');
   const lowest = activeBids.length ? Math.min(...activeBids.map((b) => b.price)) : null;
   const myBid = bids.find((b) => b.shop_id === user?.id) ?? null;
+  // Tên ẩn danh theo thứ tự gửi báo giá — tên thật chỉ hiện sau khi thanh toán
+  const aliases = new Map(
+    [...bids].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((b, i) => [b.id, anonShopLabel(i)]),
+  );
 
   const rpc = async (fn: 'accept_bid' | 'reject_bid', bidId: string) => {
-    if (fn === 'accept_bid' && !confirm('Chấp nhận báo giá này? Các báo giá còn lại sẽ tự động bị từ chối.')) return;
+    if (
+      fn === 'accept_bid' &&
+      !confirm('Chấp nhận báo giá này? Các báo giá còn lại sẽ tự động bị từ chối. Sau đó bạn quét QR thanh toán để xem thông tin shop.')
+    )
+      return;
     setBusyId(bidId);
     const { error } = await createClient().rpc(fn, { p_bid_id: bidId });
     setBusyId(null);
@@ -105,7 +119,7 @@ export default function RequestDetailPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      <Link href="/cho-hoa" className="text-sm text-stone-500 hover:text-rose-700">← Chợ hoa</Link>
+      <Link href="/cho-hoa" className="text-sm text-slate-500 hover:text-blue-700">← Chợ hoa</Link>
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
         {/* Thông tin yêu cầu */}
@@ -114,11 +128,11 @@ export default function RequestDetailPage() {
             {req.image_urls.length > 0 ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={req.image_urls[activeImg] ?? req.image_urls[0]} alt="Ảnh mẫu" className="aspect-[4/3] w-full bg-rose-50 object-contain" />
+                <img src={req.image_urls[activeImg] ?? req.image_urls[0]} alt="Ảnh mẫu" className="aspect-[4/3] w-full bg-blue-50 object-contain" />
                 {req.image_urls.length > 1 && (
                   <div className="flex gap-2 p-3">
                     {req.image_urls.map((u, i) => (
-                      <button key={u} type="button" onClick={() => setActiveImg(i)} className={`rounded-lg ring-2 ${i === activeImg ? 'ring-rose-500' : 'ring-transparent'}`}>
+                      <button key={u} type="button" onClick={() => setActiveImg(i)} className={`rounded-lg ring-2 ${i === activeImg ? 'ring-blue-500' : 'ring-transparent'}`}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={u} alt="" className="h-16 w-16 rounded-lg object-cover" />
                       </button>
@@ -127,34 +141,34 @@ export default function RequestDetailPage() {
                 )}
               </>
             ) : (
-              <div className="grid aspect-[4/3] place-items-center bg-rose-50 text-8xl" aria-hidden>💐</div>
+              <div className="grid aspect-[4/3] place-items-center bg-blue-50 text-8xl" aria-hidden>💐</div>
             )}
           </div>
 
           <div className="card space-y-4 p-6">
             <div className="flex flex-wrap items-center gap-2">
               <RequestStatusBadge status={req.status} />
-              <span className="text-xs text-stone-500">Đăng {timeAgo(req.created_at)}</span>
+              <span className="text-xs text-slate-500">Đăng {timeAgo(req.created_at)}</span>
             </div>
-            <h1 className="text-2xl font-extrabold text-stone-800">{req.title}</h1>
+            <h1 className="text-2xl font-extrabold text-slate-800">{req.title}</h1>
             <dl className="grid gap-3 text-sm sm:grid-cols-3">
-              <div className="rounded-xl bg-rose-50/60 p-3">
-                <dt className="text-xs text-stone-500">Ngân sách</dt>
+              <div className="rounded-xl bg-blue-50/60 p-3">
+                <dt className="text-xs text-slate-500">Ngân sách</dt>
                 <dd className="font-semibold">{budgetText(req.budget_min, req.budget_max)}</dd>
               </div>
-              <div className="rounded-xl bg-rose-50/60 p-3">
-                <dt className="text-xs text-stone-500">Cần ngày</dt>
+              <div className="rounded-xl bg-blue-50/60 p-3">
+                <dt className="text-xs text-slate-500">Cần ngày</dt>
                 <dd className="font-semibold">{formatDate(req.needed_by)}</dd>
               </div>
-              <div className="rounded-xl bg-rose-50/60 p-3">
-                <dt className="text-xs text-stone-500">Khu vực</dt>
+              <div className="rounded-xl bg-blue-50/60 p-3">
+                <dt className="text-xs text-slate-500">Khu vực</dt>
                 <dd className="font-semibold">{[req.district, req.city].filter(Boolean).join(', ') || '—'}</dd>
               </div>
             </dl>
-            <p className="whitespace-pre-line text-stone-700">{req.description}</p>
+            <p className="whitespace-pre-line text-slate-700">{req.description}</p>
             {design && <DesignCard design={design} />}
             {isOwner && req.status === 'open' && (
-              <button type="button" onClick={closeRequest} className="text-sm text-stone-500 underline hover:text-rose-700">
+              <button type="button" onClick={closeRequest} className="text-sm text-slate-500 underline hover:text-blue-700">
                 Đóng yêu cầu
               </button>
             )}
@@ -166,14 +180,14 @@ export default function RequestDetailPage() {
           <div className="card p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Báo giá ({activeBids.length})</h2>
-              {lowest !== null && <span className="text-sm">Thấp nhất <b className="text-rose-700">{formatVnd(lowest)}</b></span>}
+              {lowest !== null && <span className="text-sm">Thấp nhất <b className="text-blue-700">{formatVnd(lowest)}</b></span>}
             </div>
-            <p className="mt-1 flex items-center gap-1 text-xs text-stone-500">
+            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> Cập nhật trực tiếp
             </p>
 
             {visibleBids.length === 0 ? (
-              <p className="mt-4 rounded-xl bg-rose-50 p-4 text-center text-sm text-stone-600">Chưa có shop nào báo giá. Hãy quay lại sau ít phút nhé!</p>
+              <p className="mt-4 rounded-xl bg-blue-50 p-4 text-center text-sm text-slate-600">Chưa có shop nào báo giá. Hãy quay lại sau ít phút nhé!</p>
             ) : (
               <ul className="mt-4 space-y-3">
                 {visibleBids.map((b) => {
@@ -185,28 +199,29 @@ export default function RequestDetailPage() {
                         b.status === 'accepted'
                           ? 'border-emerald-300 bg-emerald-50'
                           : best
-                            ? 'border-rose-300 bg-rose-50/50'
+                            ? 'border-blue-300 bg-blue-50/50'
                             : b.status === 'rejected'
-                              ? 'border-stone-200 bg-stone-50 opacity-70'
-                              : 'border-stone-200 bg-white'
+                              ? 'border-slate-200 bg-slate-50 opacity-70'
+                              : 'border-slate-200 bg-white'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate font-semibold">
-                            🏪 {b.shop?.name ?? 'Shop hoa'} {b.shop_id === user?.id && <span className="chip ml-1">Bạn</span>}
+                            🏪 {aliases.get(b.id)} {b.shop_id === user?.id && <span className="chip ml-1">Bạn</span>}
                           </p>
-                          <p className="text-xs text-stone-500">
-                            📍 {b.shop?.district ?? '—'} · {timeAgo(b.updated_at)}
+                          <p className="text-xs text-slate-500">
+                            📍 {b.shop?.district ?? '—'}
+                            {b.shop?.rating ? ` · ⭐ ${b.shop.rating}` : ''} · {timeAgo(b.updated_at)}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-extrabold tabular-nums text-rose-700">{formatVnd(b.price)}</p>
+                          <p className="text-lg font-extrabold tabular-nums text-blue-700">{formatVnd(b.price)}</p>
                           {best && <span className="chip">Giá tốt nhất</span>}
                         </div>
                       </div>
-                      {b.message && <p className="mt-2 whitespace-pre-line text-sm text-stone-700">{b.message}</p>}
-                      {b.delivery_note && <p className="mt-1 text-xs text-stone-500">🚚 {b.delivery_note}</p>}
+                      {b.message && <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{b.message}</p>}
+                      {b.delivery_note && <p className="mt-1 text-xs text-slate-500">🚚 {b.delivery_note}</p>}
                       <div className="mt-2">
                         <BidStatusBadge status={b.status} />
                       </div>
@@ -222,19 +237,12 @@ export default function RequestDetailPage() {
                         </div>
                       )}
 
-                      {b.status === 'accepted' && isOwner && (
-                        <div className="mt-3 rounded-lg bg-white p-3 text-sm ring-1 ring-emerald-200">
-                          <p className="font-semibold">Liên hệ shop</p>
-                          <p>📞 {b.shop?.phone || 'Shop chưa cập nhật số điện thoại'}</p>
-                          {b.shop?.address && <p>🏠 {b.shop.address}</p>}
-                        </div>
-                      )}
-                      {b.status === 'accepted' && b.shop_id === user?.id && customer && (
-                        <div className="mt-3 rounded-lg bg-white p-3 text-sm ring-1 ring-emerald-200">
-                          <p className="font-semibold">🎉 Bạn đã thắng! Liên hệ khách</p>
-                          <p>👤 {customer.display_name || 'Khách hàng'}</p>
-                          <p>📞 {customer.phone || 'Khách chưa cập nhật số điện thoại'}</p>
-                        </div>
+                      {b.status === 'accepted' && isOwner && <ContactUnlock requestId={req.id} viewerRole="customer" />}
+                      {b.status === 'accepted' && b.shop_id === user?.id && (
+                        <>
+                          <p className="mt-3 font-semibold text-emerald-700">🎉 Bạn đã thắng đơn này!</p>
+                          <ContactUnlock requestId={req.id} viewerRole="shop" />
+                        </>
                       )}
                     </li>
                   );
@@ -255,7 +263,7 @@ export default function RequestDetailPage() {
               ) : isShop ? (
                 <BidForm requestId={req.id} shopId={user.id} myBid={myBid} lowest={lowest} onDone={load} />
               ) : (
-                <p className="text-sm text-stone-600">Chỉ tài khoản shop hoa mới gửi được báo giá.</p>
+                <p className="text-sm text-slate-600">Chỉ tài khoản shop hoa mới gửi được báo giá.</p>
               )}
             </div>
           )}

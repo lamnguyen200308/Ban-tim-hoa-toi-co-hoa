@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { errMsg, formatVnd } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { Bid } from '@/lib/types';
+import { CONTACT_WARNING, containsContact } from '@/lib/contact';
 
 type Props = {
   requestId: string;
@@ -27,7 +28,7 @@ export default function BidForm({ requestId, shopId, myBid, lowest, onDone }: Pr
   }, [myBid?.price]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (myBid?.status === 'rejected') {
-    return <p className="text-sm text-stone-600">Khách đã từ chối báo giá của bạn cho yêu cầu này.</p>;
+    return <p className="text-sm text-slate-600">Khách đã từ chối báo giá của bạn cho yêu cầu này.</p>;
   }
 
   const submit = async (e: FormEvent) => {
@@ -37,6 +38,10 @@ export default function BidForm({ requestId, shopId, myBid, lowest, onDone }: Pr
     const p = Math.round(Number(price));
     if (!p || p < 1000) {
       setError('Giá không hợp lệ (tối thiểu 1.000 ₫).');
+      return;
+    }
+    if (containsContact(message, delivery)) {
+      setError(CONTACT_WARNING);
       return;
     }
     setBusy(true);
@@ -70,7 +75,7 @@ export default function BidForm({ requestId, shopId, myBid, lowest, onDone }: Pr
     <form onSubmit={submit} className="space-y-3">
       <h3 className="text-lg font-bold">{isActive ? 'Báo giá của bạn' : 'Gửi báo giá'}</h3>
       {lowest !== null && (
-        <p className={`rounded-xl px-3 py-2 text-sm ${notLowest ? 'bg-amber-50 text-amber-800' : 'bg-rose-50 text-stone-700'}`}>
+        <p className={`rounded-xl px-3 py-2 text-sm ${notLowest ? 'bg-emerald-50 text-emerald-800' : 'bg-blue-50 text-slate-700'}`}>
           Giá thấp nhất hiện tại: <b>{formatVnd(lowest)}</b>
           {notLowest && ' — hạ giá để vươn lên dẫn đầu!'}
         </p>
@@ -85,7 +90,7 @@ export default function BidForm({ requestId, shopId, myBid, lowest, onDone }: Pr
           id="msg"
           className="input min-h-[90px]"
           maxLength={2000}
-          placeholder="Hoa nhập từ đâu, có thiệp/giao miễn phí không, ảnh mẫu shop từng làm…"
+          placeholder="Hoa nhập từ đâu, có thiệp/giao miễn phí không… (không ghi SĐT / email — khách thấy liên hệ sau khi thanh toán)"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />

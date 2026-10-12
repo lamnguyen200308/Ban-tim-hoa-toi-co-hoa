@@ -17,12 +17,12 @@ export function describeDesign(d: BouquetDesign) {
 
 export default function DesignCard({ design }: { design: BouquetDesign }) {
   return (
-    <div className="rounded-2xl border border-rose-100 bg-rose-50/40 p-4">
-      <p className="text-sm font-bold text-rose-700">🎨 Thiết kế 3D đính kèm</p>
+    <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+      <p className="text-sm font-bold text-blue-700">🎨 Thiết kế 3D đính kèm</p>
       <div className="mt-3 flex gap-4">
         {design.snapshot_url && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={design.snapshot_url} alt="Ảnh chụp thiết kế" className="h-28 w-28 shrink-0 rounded-xl object-cover ring-1 ring-rose-100" />
+          <img src={design.snapshot_url} alt="Ảnh chụp thiết kế" className="h-28 w-28 shrink-0 rounded-xl object-cover ring-1 ring-blue-100" />
         )}
         <div className="min-w-0 flex-1 text-sm">
           <ul className="space-y-0.5">
@@ -31,11 +31,11 @@ export default function DesignCard({ design }: { design: BouquetDesign }) {
                 <span className="truncate">
                   {i.qty} × {i.name}
                 </span>
-                <span className="tabular-nums text-stone-500">{formatVnd(i.price * i.qty)}</span>
+                <span className="tabular-nums text-slate-500">{formatVnd(i.price * i.qty)}</span>
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-stone-600">
+          <p className="mt-2 text-xs text-slate-600">
             {design.wrapper_name} · {design.style_name}
             {design.ribbon_color && (
               <span

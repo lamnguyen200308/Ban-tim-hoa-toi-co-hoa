@@ -25,7 +25,8 @@ export default function AccountPage() {
     if (!user || !profile) return;
     const supabase = createClient();
     if (profile.role === 'shop') {
-      supabase.from('shops').select('*').eq('id', user.id).maybeSingle().then(({ data }) => setShop(data as Shop | null));
+      // Bảng shops đã ẩn tên/SĐT/địa chỉ với mọi người — chủ shop đọc đầy đủ qua hàm get_my_shop
+      supabase.rpc('get_my_shop').then(({ data }) => setShop(((data as Shop[] | null) ?? [])[0] ?? null));
       supabase
         .from('bids')
         .select('*, request:requests!bids_request_id_fkey(id, title, status)')
@@ -49,7 +50,7 @@ export default function AccountPage() {
   }, [user, profile]);
 
   if (!supabaseConfigured) return <NotConfigured />;
-  if (loading) return <p className="p-10 text-center text-stone-500">Đang tải…</p>;
+  if (loading) return <p className="p-10 text-center text-slate-500">Đang tải…</p>;
   if (!user)
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
@@ -91,10 +92,10 @@ export default function AccountPage() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-extrabold text-stone-800">
+          <h1 className="text-3xl font-extrabold text-slate-800">
             {profile?.role === 'shop' ? '🏪' : '👤'} {profile?.display_name || user.email}
           </h1>
-          <p className="text-sm text-stone-500">{profile?.role === 'shop' ? 'Tài khoản shop hoa' : 'Tài khoản người mua'} · {user.email}</p>
+          <p className="text-sm text-slate-500">{profile?.role === 'shop' ? 'Tài khoản shop hoa' : 'Tài khoản người mua'} · {user.email}</p>
         </div>
         <button type="button" className="btn-outline" onClick={logout}>Đăng xuất</button>
       </div>
@@ -103,6 +104,10 @@ export default function AccountPage() {
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
           <form onSubmit={saveShop} className="card space-y-3 p-6">
             <h2 className="text-lg font-bold">Thông tin shop</h2>
+            <p className="text-xs text-slate-500">
+              🔒 Khách hàng chỉ thấy quận/huyện và điểm đánh giá. Tên, số điện thoại, địa chỉ chỉ hiện khi khách đã chọn shop
+              bạn và thanh toán qua QR.
+            </p>
             {shop ? (
               <>
                 {field('name', 'Tên shop')}
@@ -122,31 +127,31 @@ export default function AccountPage() {
                   />
                 </div>
                 <button type="submit" className="btn-primary">Lưu</button>
-                {saved && <p className="text-sm text-stone-600">{saved}</p>}
+                {saved && <p className="text-sm text-slate-600">{saved}</p>}
               </>
             ) : (
-              <p className="text-sm text-stone-500">Đang tải…</p>
+              <p className="text-sm text-slate-500">Đang tải…</p>
             )}
           </form>
 
           <div className="card p-6">
             <h2 className="text-lg font-bold">Báo giá của tôi</h2>
             {bids.length === 0 ? (
-              <p className="mt-2 text-sm text-stone-500">
-                Chưa có báo giá nào. <Link href="/cho-hoa" className="text-rose-700 underline">Vào Chợ hoa</Link>
+              <p className="mt-2 text-sm text-slate-500">
+                Chưa có báo giá nào. <Link href="/cho-hoa" className="text-blue-700 underline">Vào Chợ hoa</Link>
               </p>
             ) : (
-              <ul className="mt-3 divide-y divide-rose-50">
+              <ul className="mt-3 divide-y divide-blue-50">
                 {bids.map((b) => (
                   <li key={b.id} className="flex items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
-                      <Link href={`/cho-hoa/${b.request_id}`} className="block truncate font-semibold hover:text-rose-700">
+                      <Link href={`/cho-hoa/${b.request_id}`} className="block truncate font-semibold hover:text-blue-700">
                         {b.request?.title ?? 'Yêu cầu'}
                       </Link>
-                      <p className="text-xs text-stone-500">{timeAgo(b.updated_at)}</p>
+                      <p className="text-xs text-slate-500">{timeAgo(b.updated_at)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold tabular-nums text-rose-700">{formatVnd(b.price)}</p>
+                      <p className="font-bold tabular-nums text-blue-700">{formatVnd(b.price)}</p>
                       <BidStatusBadge status={b.status} />
                     </div>
                   </li>
@@ -160,19 +165,19 @@ export default function AccountPage() {
           <div className="card p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Yêu cầu của tôi</h2>
-              <Link href="/cho-hoa/dang-yeu-cau" className="text-sm font-semibold text-rose-700">+ Đăng mới</Link>
+              <Link href="/cho-hoa/dang-yeu-cau" className="text-sm font-semibold text-blue-700">+ Đăng mới</Link>
             </div>
             {requests.length === 0 ? (
-              <p className="mt-2 text-sm text-stone-500">Bạn chưa đăng yêu cầu nào.</p>
+              <p className="mt-2 text-sm text-slate-500">Bạn chưa đăng yêu cầu nào.</p>
             ) : (
-              <ul className="mt-3 divide-y divide-rose-50">
+              <ul className="mt-3 divide-y divide-blue-50">
                 {requests.map((r) => (
                   <li key={r.id} className="py-3">
-                    <Link href={`/cho-hoa/${r.id}`} className="font-semibold hover:text-rose-700">{r.title}</Link>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                    <Link href={`/cho-hoa/${r.id}`} className="font-semibold hover:text-blue-700">{r.title}</Link>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                       <RequestStatusBadge status={r.status} />
                       <span>{r.bid_count} báo giá</span>
-                      {r.lowest_bid && <span className="font-semibold text-rose-700">thấp nhất {formatVnd(r.lowest_bid)}</span>}
+                      {r.lowest_bid && <span className="font-semibold text-blue-700">thấp nhất {formatVnd(r.lowest_bid)}</span>}
                     </div>
                   </li>
                 ))}
@@ -183,23 +188,23 @@ export default function AccountPage() {
           <div className="card p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Thiết kế đã lưu</h2>
-              <Link href="/thiet-ke" className="text-sm font-semibold text-rose-700">+ Thiết kế mới</Link>
+              <Link href="/thiet-ke" className="text-sm font-semibold text-blue-700">+ Thiết kế mới</Link>
             </div>
             {designs.length === 0 ? (
-              <p className="mt-2 text-sm text-stone-500">Chưa có thiết kế nào.</p>
+              <p className="mt-2 text-sm text-slate-500">Chưa có thiết kế nào.</p>
             ) : (
               <ul className="mt-3 grid grid-cols-2 gap-3">
                 {designs.map((d) => (
-                  <li key={d.id} className="rounded-xl border border-rose-100 p-2">
+                  <li key={d.id} className="rounded-xl border border-blue-100 p-2">
                     {d.snapshot_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={d.snapshot_url} alt="" className="aspect-square w-full rounded-lg object-cover" />
                     ) : (
-                      <div className="grid aspect-square place-items-center rounded-lg bg-rose-50 text-4xl" aria-hidden>💐</div>
+                      <div className="grid aspect-square place-items-center rounded-lg bg-blue-50 text-4xl" aria-hidden>💐</div>
                     )}
                     <p className="mt-2 truncate text-sm font-semibold">{d.name}</p>
-                    <p className="text-xs text-stone-500">{formatVnd(d.total_price)}</p>
-                    <Link href={`/cho-hoa/dang-yeu-cau?design=${d.id}`} className="mt-1 block text-xs font-semibold text-rose-700">
+                    <p className="text-xs text-slate-500">{formatVnd(d.total_price)}</p>
+                    <Link href={`/cho-hoa/dang-yeu-cau?design=${d.id}`} className="mt-1 block text-xs font-semibold text-blue-700">
                       Đăng lên Chợ hoa →
                     </Link>
                   </li>
