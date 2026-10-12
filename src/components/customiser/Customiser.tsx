@@ -1,0 +1,423 @@
+'use client';
+
+import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { LOCAL_CATALOGUE, RIBBON_COLOURS, loadCatalogue } from '@/lib/catalogue';
+import { MAX_STEMS, computePrice } from '@/lib/pricing';
+import { errMsg, formatVnd } from '@/lib/format';
+import { createClient, supabaseConfigured } from '@/lib/supabase/client';
+import type { BouquetItem, Catalogue, Flower } from '@/lib/types';
+
+const BouquetCanvas = dynamic(() => import('./BouquetCanvas'), {
+  ssr: false,
+  loading: () => <div className="grid h-full place-items-center text-stone-400">Đang dựng khung 3D…</div>,
+});
+
+const DRAFT_KEY = 'btht-draft-v1';
+const DRAG_PREFIX = 'flower:';
+
+type Draft = { items: BouquetItem[]; wrapperId: string; styleId: string; ribbon: string };
+
+function FlowerSwatch({ flower }: { flower: Flower }) {
+  return (
+    <span
+      aria-hidden
+      className="h-9 w-9 shrink-0 rounded-full ring-1 ring-stone-200"
+      style={{ background: `radial-gradient(circle at 50% 50%, ${flower.accent_color} 0 26%, ${flower.color} 30% 100%)` }}
+    />
+  );
+}
+
+export default function Customiser() {
+  const router = useRouter();
+  const [catalogue, setCatalogue] = useState<Catalogue>(LOCAL_CATALOGUE);
+  const [source, setSource] = useState<'local' | 'supabase'>('local');
+  const [items, setItems] = useState<BouquetItem[]>([]);
+  const [wrapperId, setWrapperId] = useState(LOCAL_CATALOGUE.wrappers[0].id);
+  const [styleId, setStyleId] = useState(LOCAL_CATALOGUE.styles[0].id);
+  const [ribbon, setRibbon] = useState(RIBBON_COLOURS[0].value);
+  const [autoRotate, setAutoRotate] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const canvasEl = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    loadCatalogue().then(({ catalogue, source }) => {
+      setCatalogue(catalogue);
+      setSource(source);
+    });
+  }, []);
+
+  // Khôi phục bản nháp (giữ thiết kế khi phải đăng nhập giữa chừng)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw) as Partial<Draft>;
+        if (Array.isArray(d.items)) setItems(d.items.filter((i) => i && typeof i.flowerId === 'string' && i.qty > 0));
+        if (d.wrapperId) setWrapperId(d.wrapperId);
+        if (d.styleId) setStyleId(d.styleId);
+        if (d.ribbon) setRibbon(d.ribbon);
+      }
+    } catch {
+      /* bộ nhớ trình duyệt không dùng được — bỏ qua */
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ items, wrapperId, styleId, ribbon } satisfies Draft));
+    } catch {
+      /* bỏ qua */
+    }
+  }, [hydrated, items, wrapperId, styleId, ribbon]);
+
+  const price = useMemo(() => computePrice(items, catalogue, wrapperId, styleId), [items, catalogue, wrapperId, styleId]);
+
+  const addFlower = (id: string) => {
+    setNotice(null);
+    if (price.stems >= MAX_STEMS) {
+      setNotice(`Bó hoa tối đa ${MAX_STEMS} cành nhé.`);
+      return;
+    }
+    setItems((prev) =>
+      prev.some((i) => i.flowerId === id)
+        ? prev.map((i) => (i.flowerId === id ? { ...i, qty: i.qty + 1 } : i))
+        : [...prev, { flowerId: id, qty: 1 }],
+    );
+  };
+
+  const changeQty = (id: string, delta: number) => {
+    if (delta > 0) return addFlower(id);
+    setItems((prev) => prev.map((i) => (i.flowerId === id ? { ...i, qty: i.qty + delta } : i)).filter((i) => i.qty > 0));
+  };
+
+  const onDrop = (e: DragEvent<HTMLElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    const data = e.dataTransfer.getData('text/plain');
+    if (!data.startsWith(DRAG_PREFIX)) return;
+    const id = data.slice(DRAG_PREFIX.length);
+    if (catalogue.flowers.some((f) => f.id === id)) addFlower(id);
+  };
+
+  const snapshotBlob = () =>
+    new Promise<Blob | null>((resolve) => {
+      const c = canvasEl.current;
+      if (!c) return resolve(null);
+      c.toBlob((b) => resolve(b), 'image/png');
+    });
+
+  const downloadImage = () => {
+    const c = canvasEl.current;
+    if (!c) return;
+    const a = document.createElement('a');
+    a.href = c.toDataURL('image/png');
+    a.download = 'bo-hoa-cua-toi.png';
+    a.click();
+  };
+
+  async function saveDesign(thenPost: boolean) {
+    setNotice(null);
+    if (!price.lines.length) {
+      setNotice('Hãy thêm ít nhất một bông hoa vào bó.');
+      return;
+    }
+    if (!supabaseConfigured) {
+      setNotice('Chưa kết nối Supabase (xem README). Bạn vẫn có thể tải ảnh bó hoa.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/dang-nhap?next=/thiet-ke');
+        return;
+      }
+
+      let snapshot_url: string | null = null;
+      const blob = await snapshotBlob();
+      if (blob) {
+        const path = `${user.id}/designs/${crypto.randomUUID()}.png`;
+        const up = await supabase.storage.from('request-images').upload(path, blob, { contentType: 'image/png' });
+        if (!up.error) snapshot_url = supabase.storage.from('request-images').getPublicUrl(path).data.publicUrl;
+      }
+
+      const top = [...price.lines].sort((a, b) => b.qty - a.qty)[0];
+      const { data, error } = await supabase
+        .from('bouquet_designs')
+        .insert({
+          customer_id: user.id,
+          name: `${top.label} ${price.stems} cành`,
+          wrapper_id: price.wrapper?.id ?? null,
+          wrapper_name: price.wrapper?.name ?? null,
+          style_id: price.style?.id ?? null,
+          style_name: price.style?.name ?? null,
+          ribbon_color: ribbon,
+          items: price.lines.map((l) => ({ flowerId: l.id, name: l.label, qty: l.qty, price: l.unit })),
+          total_price: price.total,
+          snapshot_url,
+        })
+        .select('id')
+        .single();
+      if (error) throw error;
+
+      if (thenPost) router.push(`/cho-hoa/dang-yeu-cau?design=${data.id}`);
+      else setNotice('Đã lưu thiết kế vào tài khoản của bạn ✨');
+    } catch (e) {
+      setNotice('Không lưu được: ' + errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold text-stone-800 sm:text-3xl">Thiết kế bó hoa của bạn</h1>
+          <p className="text-sm text-stone-500">
+            Kéo hoa vào khung 3D (hoặc bấm +), kéo chuột để xoay ngắm mọi góc. Giá cập nhật ngay khi bạn thay đổi.
+          </p>
+        </div>
+        {source === 'local' && <span className="chip">Đang dùng bảng giá mẫu</span>}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)_330px]">
+        {/* Danh sách hoa */}
+        <aside className="card p-3 lg:max-h-[640px] lg:overflow-y-auto">
+          <h2 className="panel-title px-1">Chọn hoa</h2>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
+            {catalogue.flowers.map((f) => (
+              <li
+                key={f.id}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', DRAG_PREFIX + f.id);
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+                className="flex cursor-grab items-center gap-2 rounded-xl border border-rose-100 bg-white p-2 transition hover:border-rose-300 active:cursor-grabbing"
+              >
+                <FlowerSwatch flower={f} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{f.name}</p>
+                  <p className="text-xs text-stone-500">{formatVnd(f.price)}/cành</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => addFlower(f.id)}
+                  aria-label={`Thêm ${f.name}`}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-rose-50 font-bold text-rose-700 transition hover:bg-rose-600 hover:text-white"
+                >
+                  +
+                </button>
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        {/* Khung 3D */}
+        <section
+          className={`card relative h-[460px] overflow-hidden sm:h-[560px] lg:h-[640px] ${dragOver ? 'ring-4 ring-rose-300' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            if (!dragOver) setDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+          }}
+          onDrop={onDrop}
+        >
+          <BouquetCanvas
+            catalogue={catalogue}
+            items={items}
+            wrapper={price.wrapper}
+            style={price.style}
+            ribbon={ribbon}
+            autoRotate={autoRotate}
+            onCanvas={(el) => {
+              canvasEl.current = el;
+            }}
+          />
+          {dragOver && (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center bg-rose-50/60 text-lg font-bold text-rose-700">
+              Thả vào để thêm hoa 🌷
+            </div>
+          )}
+          {!items.length && !dragOver && (
+            <div className="pointer-events-none absolute inset-x-0 top-6 text-center text-sm text-stone-500">
+              Bó hoa đang trống — kéo một bông hoa vào đây
+            </div>
+          )}
+          <div className="absolute bottom-3 left-3 flex gap-2">
+            <button type="button" className="btn-outline !px-3 !py-1.5 text-xs" onClick={() => setAutoRotate((v) => !v)}>
+              {autoRotate ? '⏸ Dừng xoay' : '⟳ Tự xoay'}
+            </button>
+            <button type="button" className="btn-outline !px-3 !py-1.5 text-xs" onClick={downloadImage}>
+              ⬇ Tải ảnh
+            </button>
+          </div>
+          <div className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1 text-xs text-stone-500 ring-1 ring-rose-100">
+            {price.stems}/{MAX_STEMS} cành
+          </div>
+        </section>
+
+        {/* Tuỳ chọn + giá */}
+        <aside className="flex flex-col gap-4">
+          <div className="card space-y-4 p-4">
+            <div>
+              <h3 className="panel-title">Giấy gói</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {catalogue.wrappers.map((w) => (
+                  <button
+                    type="button"
+                    key={w.id}
+                    onClick={() => setWrapperId(w.id)}
+                    className={`rounded-xl border p-2 text-left transition ${
+                      price.wrapper?.id === w.id ? 'border-rose-500 ring-2 ring-rose-200' : 'border-rose-100 hover:border-rose-300'
+                    }`}
+                  >
+                    <span
+                      className="mb-1 block h-7 rounded-lg ring-1 ring-black/10"
+                      style={{ background: w.color, opacity: Math.max(w.opacity, 0.5) }}
+                    />
+                    <span className="block text-[11px] font-medium leading-tight">{w.name}</span>
+                    <span className="block text-[11px] text-stone-500">{formatVnd(w.price)}/tờ</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="panel-title">Kiểu gói</h3>
+              <div className="space-y-2">
+                {catalogue.styles.map((s) => (
+                  <button
+                    type="button"
+                    key={s.id}
+                    onClick={() => setStyleId(s.id)}
+                    className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition ${
+                      price.style?.id === s.id ? 'border-rose-500 bg-rose-50/60 ring-2 ring-rose-200' : 'border-rose-100 hover:border-rose-300'
+                    }`}
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold">{s.name}</span>
+                      {s.description && <span className="block text-xs text-stone-500">{s.description}</span>}
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-rose-700">+{formatVnd(s.fee)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="panel-title">Ruy băng</h3>
+              <div className="flex flex-wrap gap-2">
+                {RIBBON_COLOURS.map((c) => (
+                  <button
+                    type="button"
+                    key={c.value}
+                    title={c.name}
+                    aria-label={c.name}
+                    onClick={() => setRibbon(c.value)}
+                    className={`h-7 w-7 rounded-full ring-2 ring-offset-2 transition ${ribbon === c.value ? 'ring-rose-500' : 'ring-transparent'}`}
+                    style={{ background: c.value, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.15)' }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="card p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="panel-title !mb-0">Bó hoa của bạn</h3>
+              {items.length > 0 && (
+                <button type="button" className="text-xs text-stone-500 hover:text-rose-700" onClick={() => setItems([])}>
+                  Xóa hết
+                </button>
+              )}
+            </div>
+
+            {price.lines.length === 0 ? (
+              <p className="mt-2 text-sm text-stone-500">Chưa có hoa nào.</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-rose-50">
+                {price.lines.map((l) => (
+                  <li key={l.id} className="flex items-center gap-2 py-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">{l.label}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label={`Bớt ${l.label}`}
+                        onClick={() => changeQty(l.id, -1)}
+                        className="grid h-6 w-6 place-items-center rounded-full bg-rose-50 text-rose-700 hover:bg-rose-100"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center tabular-nums">{l.qty}</span>
+                      <button
+                        type="button"
+                        aria-label={`Thêm ${l.label}`}
+                        onClick={() => changeQty(l.id, 1)}
+                        className="grid h-6 w-6 place-items-center rounded-full bg-rose-50 text-rose-700 hover:bg-rose-100"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <span className="w-24 text-right tabular-nums">{formatVnd(l.total)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <dl className="mt-3 space-y-1 border-t border-dashed border-rose-200 pt-3 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-stone-600">Hoa ({price.stems} cành)</dt>
+                <dd className="tabular-nums">{formatVnd(price.flowersTotal)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-stone-600">
+                  {price.wrapper?.name ?? 'Giấy gói'} × {price.sheets} tờ
+                </dt>
+                <dd className="tabular-nums">{formatVnd(price.wrapperTotal)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-stone-600">Công gói ({price.style?.name})</dt>
+                <dd className="tabular-nums">{formatVnd(price.styleFee)}</dd>
+              </div>
+            </dl>
+
+            <div className="mt-3 flex items-end justify-between">
+              <span className="text-sm font-semibold text-stone-600">Tổng tạm tính</span>
+              <span key={price.total} className="inline-block animate-pop text-2xl font-extrabold tabular-nums text-rose-700">
+                {formatVnd(price.total)}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-stone-400">
+              Giá tham khảo. Đăng lên Chợ hoa để các shop cạnh tranh báo giá tốt hơn.
+            </p>
+
+            <div className="mt-4 grid gap-2">
+              <button type="button" className="btn-primary" disabled={busy} onClick={() => saveDesign(true)}>
+                🛎️ Đăng lên Chợ hoa để nhận báo giá
+              </button>
+              <button type="button" className="btn-outline" disabled={busy} onClick={() => saveDesign(false)}>
+                💾 Lưu thiết kế
+              </button>
+            </div>
+            {notice && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{notice}</p>}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
