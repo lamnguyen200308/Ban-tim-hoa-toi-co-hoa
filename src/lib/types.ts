@@ -45,6 +45,10 @@ export type Catalogue = {
 
 export type BouquetItem = { flowerId: string; qty: number };
 
+/** Vị trí bông hoa do khách tự đặt: [x, y, z] trong toạ độ của bó hoa. Khoá = `${flowerId}#${thứ tự}`. */
+export type HeadPos = [number, number, number];
+export type FlowerPositions = Record<string, HeadPos>;
+
 export type Role = 'customer' | 'shop';
 
 export type Profile = {

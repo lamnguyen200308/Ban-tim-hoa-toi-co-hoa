@@ -7,7 +7,7 @@ import { LOCAL_CATALOGUE, RIBBON_COLOURS, loadCatalogue } from '@/lib/catalogue'
 import { MAX_STEMS, computePrice } from '@/lib/pricing';
 import { errMsg, formatVnd } from '@/lib/format';
 import { createClient, supabaseConfigured } from '@/lib/supabase/client';
-import type { BouquetItem, Catalogue, Flower } from '@/lib/types';
+import type { BouquetItem, Catalogue, Flower, FlowerPositions, HeadPos } from '@/lib/types';
 
 const BouquetCanvas = dynamic(() => import('./BouquetCanvas'), {
   ssr: false,
@@ -17,7 +17,30 @@ const BouquetCanvas = dynamic(() => import('./BouquetCanvas'), {
 const DRAFT_KEY = 'btht-draft-v1';
 const DRAG_PREFIX = 'flower:';
 
-type Draft = { items: BouquetItem[]; wrapperId: string; styleId: string; ribbon: string };
+type Draft = { items: BouquetItem[]; wrapperId: string; styleId: string; ribbon: string; positions?: FlowerPositions };
+
+const NUDGE = 0.06;
+
+/** Tách khoá `${flowerId}#${thứ tự}`. */
+function splitKey(key: string): [string, number] {
+  const i = key.lastIndexOf('#');
+  return [key.slice(0, i), Number(key.slice(i + 1))];
+}
+
+function isHeadPos(v: unknown): v is HeadPos {
+  return Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number' && Number.isFinite(n));
+}
+
+/** Bỏ bông thứ `k` của một loại hoa: các bông phía sau lùi số thứ tự, giữ nguyên vị trí đã đặt. */
+function shiftPositions(prev: FlowerPositions, flowerId: string, k: number): FlowerPositions {
+  const next: FlowerPositions = {};
+  for (const [key, pos] of Object.entries(prev)) {
+    const [id, j] = splitKey(key);
+    if (id !== flowerId || j < k) next[key] = pos;
+    else if (j > k) next[`${id}#${j - 1}`] = pos;
+  }
+  return next;
+}
 
 function FlowerSwatch({ flower }: { flower: Flower }) {
   return (
@@ -38,6 +61,8 @@ export default function Customiser() {
   const [styleId, setStyleId] = useState(LOCAL_CATALOGUE.styles[0].id);
   const [ribbon, setRibbon] = useState(RIBBON_COLOURS[0].value);
   const [autoRotate, setAutoRotate] = useState(true);
+  const [positions, setPositions] = useState<FlowerPositions>({});
+  const [selected, setSelected] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,6 +86,9 @@ export default function Customiser() {
         if (d.wrapperId) setWrapperId(d.wrapperId);
         if (d.styleId) setStyleId(d.styleId);
         if (d.ribbon) setRibbon(d.ribbon);
+        if (d.positions && typeof d.positions === 'object') {
+          setPositions(Object.fromEntries(Object.entries(d.positions).filter(([k, v]) => k.includes('#') && isHeadPos(v))));
+        }
       }
     } catch {
       /* bộ nhớ trình duyệt không dùng được — bỏ qua */
@@ -71,11 +99,11 @@ export default function Customiser() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ items, wrapperId, styleId, ribbon } satisfies Draft));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ items, wrapperId, styleId, ribbon, positions } satisfies Draft));
     } catch {
       /* bỏ qua */
     }
-  }, [hydrated, items, wrapperId, styleId, ribbon]);
+  }, [hydrated, items, wrapperId, styleId, ribbon, positions]);
 
   const price = useMemo(() => computePrice(items, catalogue, wrapperId, styleId), [items, catalogue, wrapperId, styleId]);
 
@@ -92,9 +120,54 @@ export default function Customiser() {
     );
   };
 
+  /** Bỏ đúng bông thứ `k` của loại hoa `id` (mặc định: bông cuối). */
+  const removeOne = (id: string, k?: number) => {
+    const qty = items.find((i) => i.flowerId === id)?.qty ?? 0;
+    if (!qty) return;
+    const idx = k ?? qty - 1;
+    setItems((prev) => prev.map((i) => (i.flowerId === id ? { ...i, qty: i.qty - 1 } : i)).filter((i) => i.qty > 0));
+    setPositions((prev) => shiftPositions(prev, id, idx));
+    setSelected((cur) => {
+      if (!cur) return cur;
+      const [sid, sk] = splitKey(cur);
+      if (sid !== id || sk < idx) return cur;
+      return sk === idx ? null : `${sid}#${sk - 1}`;
+    });
+  };
+
   const changeQty = (id: string, delta: number) => {
     if (delta > 0) return addFlower(id);
-    setItems((prev) => prev.map((i) => (i.flowerId === id ? { ...i, qty: i.qty + delta } : i)).filter((i) => i.qty > 0));
+    removeOne(id);
+  };
+
+  const selectFlower = (key: string | null) => {
+    setSelected(key);
+    if (key) setAutoRotate(false); // dừng xoay để dễ chỉnh
+  };
+
+  const moveFlower = (key: string, pos: HeadPos) => setPositions((prev) => ({ ...prev, [key]: pos }));
+
+  const nudgeSelected = (dy: number) => {
+    if (!selected) return;
+    const base = positions[selected] ?? currentHead.current?.(selected);
+    if (!base) return;
+    moveFlower(selected, [base[0], Math.min(1.45, Math.max(0.3, base[1] + dy)), base[2]]);
+  };
+
+  const resetSelected = () => {
+    if (!selected) return;
+    setPositions(({ [selected]: _removed, ...rest }) => rest);
+  };
+
+  const currentHead = useRef<((key: string) => HeadPos | undefined) | null>(null);
+  const selectedFlower = selected ? catalogue.flowers.find((f) => f.id === splitKey(selected)[0]) : undefined;
+  const hasCustom = Object.keys(positions).length > 0;
+
+  /** Ẩn vòng chọn trước khi chụp ảnh bó hoa. */
+  const hideSelection = async () => {
+    if (!selected) return;
+    setSelected(null);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   };
 
   const onDrop = (e: DragEvent<HTMLElement>) => {
@@ -113,7 +186,8 @@ export default function Customiser() {
       c.toBlob((b) => resolve(b), 'image/png');
     });
 
-  const downloadImage = () => {
+  const downloadImage = async () => {
+    await hideSelection();
     const c = canvasEl.current;
     if (!c) return;
     const a = document.createElement('a');
@@ -144,6 +218,7 @@ export default function Customiser() {
       }
 
       let snapshot_url: string | null = null;
+      await hideSelection();
       const blob = await snapshotBlob();
       if (blob) {
         const path = `${user.id}/designs/${crypto.randomUUID()}.png`;
@@ -185,7 +260,8 @@ export default function Customiser() {
         <div>
           <h1 className="text-2xl font-extrabold text-stone-800 sm:text-3xl">Thiết kế bó hoa của bạn</h1>
           <p className="text-sm text-stone-500">
-            Kéo hoa vào khung 3D (hoặc bấm +), kéo chuột để xoay ngắm mọi góc. Giá cập nhật ngay khi bạn thay đổi.
+            Kéo hoa vào khung 3D (hoặc bấm +), kéo nền để xoay ngắm mọi góc. Bấm vào một bông rồi kéo để đổi vị trí.
+            Giá cập nhật ngay khi bạn thay đổi.
           </p>
         </div>
         {source === 'local' && <span className="chip">Đang dùng bảng giá mẫu</span>}
@@ -247,10 +323,54 @@ export default function Customiser() {
             onCanvas={(el) => {
               canvasEl.current = el;
             }}
+            positions={positions}
+            selectedKey={selected}
+            onSelect={selectFlower}
+            onMove={moveFlower}
+            headOf={(fn) => {
+              currentHead.current = fn;
+            }}
           />
+          {selected && selectedFlower && (
+            <div className="absolute inset-x-3 top-3 flex flex-wrap items-center gap-2 rounded-2xl bg-white/95 p-2 text-xs shadow-sm ring-1 ring-rose-100">
+              <span className="px-1 font-semibold text-stone-700">
+                ✋ {selectedFlower.name} — kéo để di chuyển
+              </span>
+              <span className="flex-1" />
+              <button type="button" className="btn-outline !px-2.5 !py-1 text-xs" onClick={() => nudgeSelected(NUDGE)} aria-label="Nâng bông hoa lên">
+                ↑ Nâng
+              </button>
+              <button type="button" className="btn-outline !px-2.5 !py-1 text-xs" onClick={() => nudgeSelected(-NUDGE)} aria-label="Hạ bông hoa xuống">
+                ↓ Hạ
+              </button>
+              {positions[selected] && (
+                <button type="button" className="btn-outline !px-2.5 !py-1 text-xs" onClick={resetSelected}>
+                  ↺ Vị trí gốc
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-outline !px-2.5 !py-1 text-xs"
+                onClick={() => {
+                  const [id, k] = splitKey(selected);
+                  removeOne(id, k);
+                }}
+              >
+                🗑 Bỏ bông này
+              </button>
+              <button type="button" className="btn-primary !px-3 !py-1 text-xs" onClick={() => setSelected(null)}>
+                ✓ Xong
+              </button>
+            </div>
+          )}
           {dragOver && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center bg-rose-50/60 text-lg font-bold text-rose-700">
               Thả vào để thêm hoa 🌷
+            </div>
+          )}
+          {items.length > 0 && !selected && !dragOver && (
+            <div className="pointer-events-none absolute inset-x-0 top-3 text-center text-xs text-stone-400">
+              Mẹo: bấm vào một bông hoa để chọn và kéo đổi vị trí
             </div>
           )}
           {!items.length && !dragOver && (
@@ -265,6 +385,18 @@ export default function Customiser() {
             <button type="button" className="btn-outline !px-3 !py-1.5 text-xs" onClick={downloadImage}>
               ⬇ Tải ảnh
             </button>
+            {hasCustom && (
+              <button
+                type="button"
+                className="btn-outline !px-3 !py-1.5 text-xs"
+                onClick={() => {
+                  setPositions({});
+                  setSelected(null);
+                }}
+              >
+                ✨ Tự xếp lại
+              </button>
+            )}
           </div>
           <div className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1 text-xs text-stone-500 ring-1 ring-rose-100">
             {price.stems}/{MAX_STEMS} cành
@@ -341,7 +473,12 @@ export default function Customiser() {
             <div className="flex items-center justify-between">
               <h3 className="panel-title !mb-0">Bó hoa của bạn</h3>
               {items.length > 0 && (
-                <button type="button" className="text-xs text-stone-500 hover:text-rose-700" onClick={() => setItems([])}>
+                <button type="button" className="text-xs text-stone-500 hover:text-rose-700" onClick={() => {
+                    setItems([]);
+                    setPositions({});
+                    setSelected(null);
+                  }}
+                >
                   Xóa hết
                 </button>
               )}

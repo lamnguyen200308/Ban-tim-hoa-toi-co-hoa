@@ -2,7 +2,7 @@
 
 Sàn hoa tươi với 2 tính năng chính:
 
-1. **Thiết kế bó hoa 3D** (`/thiet-ke`) — kéo-thả hoa vào bó, chọn giấy gói, kiểu gói, ruy băng; xoay 360° để ngắm; giá cập nhật ngay.
+1. **Thiết kế bó hoa 3D** (`/thiet-ke`) — kéo-thả hoa vào bó, chọn giấy gói, kiểu gói, ruy băng; xoay 360° để ngắm; giá cập nhật ngay. Bấm vào một bông để chọn rồi kéo đổi vị trí (chạy cả trên điện thoại), nâng/hạ, trả về vị trí gốc hoặc bỏ riêng bông đó; vị trí được lưu trong bản nháp và hiện trong ảnh chụp bó hoa.
 2. **Chợ hoa** (`/cho-hoa`) — khách đăng mô tả + ảnh (hoặc thiết kế 3D) → các shop hoa báo giá công khai, có thể hạ giá để cạnh tranh → khách chấp nhận / từ chối. Báo giá mới hiện ngay (Supabase Realtime).
 
 **Công nghệ:** Next.js 14 (App Router) · React Three Fiber · Tailwind CSS · Supabase (Postgres, Auth, Storage, Realtime) · Vercel.
