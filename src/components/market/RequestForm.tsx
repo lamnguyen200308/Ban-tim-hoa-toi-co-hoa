@@ -210,7 +210,7 @@ export default function RequestForm() {
                   type="button"
                   aria-label="Bỏ ảnh"
                   onClick={() => setFiles((f) => f.filter((_, j) => j !== i))}
-                  className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-slate-800 text-xs text-white"
+                  className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-xs text-white ring-1 ring-white/20"
                 >
                   ✕
                 </button>

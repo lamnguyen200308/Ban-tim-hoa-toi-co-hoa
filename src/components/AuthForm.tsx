@@ -79,7 +79,7 @@ export default function AuthForm() {
               key={m}
               type="button"
               onClick={() => setMode(m)}
-              className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${mode === m ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}
+              className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${mode === m ? 'bg-blue-600 text-white shadow-glow' : 'text-slate-500'}`}
             >
               {m === 'login' ? 'Đăng nhập' : 'Đăng ký'}
             </button>

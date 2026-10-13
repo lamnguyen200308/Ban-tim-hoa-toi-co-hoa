@@ -77,7 +77,7 @@ type TabKey = (typeof TABS)[number][0];
 
 function Stat({ label, value, hint, tone = 'plain' }: { label: string; value: string | number; hint?: string; tone?: 'plain' | 'demo' | 'real' }) {
   const cls =
-    tone === 'demo' ? 'bg-amber-50 ring-amber-200' : tone === 'real' ? 'bg-emerald-50 ring-emerald-200' : 'bg-white ring-slate-200';
+    tone === 'demo' ? 'bg-amber-50 ring-amber-200' : tone === 'real' ? 'bg-emerald-50 ring-emerald-200' : 'bg-surface ring-slate-200';
   return (
     <div className={`rounded-2xl p-4 ring-1 ${cls}`}>
       <p className="text-xs font-medium text-slate-500">{label}</p>
@@ -218,7 +218,7 @@ export default function AdminPage() {
             type="button"
             onClick={() => setTab(k)}
             className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
-              tab === k ? 'bg-[var(--ink)] text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
+              tab === k ? 'bg-blue-600 text-white shadow-glow' : 'bg-surface text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
             }`}
           >
             {label}

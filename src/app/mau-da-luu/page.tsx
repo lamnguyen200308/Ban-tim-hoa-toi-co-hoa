@@ -42,7 +42,7 @@ export default function SavedDesignsPage() {
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-800">Mẫu đã lưu 💾</h1>
+          <h1 className="text-3xl font-extrabold text-slate-800">Mẫu đã lưu</h1>
           <p className="mt-1 text-slate-600">
             {user
               ? 'Mẫu trên máy này và thiết kế trong tài khoản của bạn.'
@@ -128,10 +128,10 @@ export default function SavedDesignsPage() {
       )}
 
       {!loading && !user && local.length > 0 && (
-        <div className="card mt-10 flex flex-wrap items-center justify-between gap-4 bg-[var(--ink)] p-6 text-white ring-0">
+        <div className="card-glow mt-10 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-br from-blue-600/20 via-surface to-emerald-500/10 p-6 text-white">
           <div>
             <p className="font-bold">Muốn các shop báo giá cho mẫu của bạn?</p>
-            <p className="text-sm text-slate-300">Đăng nhập, mở mẫu rồi bấm “Đăng lên Chợ hoa”.</p>
+            <p className="text-sm text-slate-600">Đăng nhập, mở mẫu rồi bấm “Đăng lên Chợ hoa”.</p>
           </div>
           <Link href="/dang-nhap?next=/mau-da-luu" className="btn-accent">
             Đăng nhập / Đăng ký

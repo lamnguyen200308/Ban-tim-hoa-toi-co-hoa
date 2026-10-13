@@ -156,7 +156,7 @@ export default function BidForm({ requestId, shopId, myBid, lowest, onDone }: Pr
             <input id="delivery_fee" type="number" inputMode="numeric" min={0} step={5000} className="input" value={f.delivery_fee} onChange={set('delivery_fee')} />
           </div>
         </div>
-        <p className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm ring-1 ring-slate-200">
+        <p className="flex items-center justify-between rounded-lg bg-surface px-3 py-2 text-sm ring-1 ring-slate-200">
           <span className="text-slate-600">Tổng giá cuối cùng</span>
           <b className="text-lg tabular-nums text-blue-700">{formatVnd(total)}</b>
         </p>

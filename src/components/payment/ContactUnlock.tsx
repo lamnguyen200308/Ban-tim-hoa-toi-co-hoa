@@ -89,7 +89,7 @@ export default function ContactUnlock({ requestId, viewerRole }: { requestId: st
   }
 
   return (
-    <div className="mt-3 rounded-xl bg-white p-3 text-sm ring-1 ring-blue-200">
+    <div className="mt-3 rounded-xl bg-surface p-3 text-sm ring-1 ring-blue-200">
       <p className="font-semibold">🔒 Thông tin {other} đang được giữ kín</p>
       <div className="mt-2 space-y-1 text-slate-500" aria-hidden>
         <p>

@@ -66,7 +66,7 @@ export default function MarketPage() {
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-800">Chợ hoa 🛎️</h1>
+          <h1 className="text-3xl font-extrabold text-slate-800">Chợ hoa</h1>
           <p className="mt-1 text-slate-600">
             {profile?.role === 'shop'
               ? 'Chọn một yêu cầu và gửi báo giá cạnh tranh để chốt đơn.'
@@ -81,7 +81,7 @@ export default function MarketPage() {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        <div className="flex rounded-full bg-white p-1 ring-1 ring-blue-100">
+        <div className="flex rounded-full bg-surface p-1 ring-1 ring-blue-100">
           {(user ? (['open', 'mine'] as const) : (['open'] as const)).map((f) => (
             <button
               key={f}
@@ -184,12 +184,12 @@ export default function MarketPage() {
 
 function LockedCard({ hidden, loggedIn }: { hidden: number; loggedIn: boolean }) {
   return (
-    <div className="card flex flex-col justify-center gap-3 bg-[var(--ink)] p-6 text-white ring-0">
+    <div className="card-glow flex flex-col justify-center gap-3 bg-gradient-to-br from-blue-600/20 via-surface to-emerald-500/10 p-6 text-white">
       <p className="text-4xl" aria-hidden>🔒</p>
       <p className="text-lg font-bold">Còn {hidden} đơn đang chờ báo giá</p>
       {loggedIn ? (
         <>
-          <p className="text-sm text-slate-300">
+          <p className="text-sm text-slate-600">
             Bạn đã xem hết số đơn miễn phí. Gói xem thêm đơn (trả phí) sẽ sớm ra mắt.
           </p>
           <button type="button" disabled className="btn-accent">
@@ -198,7 +198,7 @@ function LockedCard({ hidden, loggedIn }: { hidden: number; loggedIn: boolean })
         </>
       ) : (
         <>
-          <p className="text-sm text-slate-300">Đăng nhập để xem thêm 10 đơn nữa và gửi báo giá.</p>
+          <p className="text-sm text-slate-600">Đăng nhập để xem thêm 10 đơn nữa và gửi báo giá.</p>
           <Link href="/dang-nhap?role=shop&next=/cho-hoa" className="btn-accent">
             Đăng nhập / Đăng ký shop
           </Link>

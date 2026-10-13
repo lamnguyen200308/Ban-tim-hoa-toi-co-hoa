@@ -1,7 +1,7 @@
 'use client';
 
 import { Canvas, useFrame } from '@react-three/fiber';
-import { ContactShadows, OrbitControls } from '@react-three/drei';
+import { ContactShadows, Grid, OrbitControls } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type ElementRef, type ReactNode } from 'react';
 import * as THREE from 'three';
@@ -198,11 +198,14 @@ export default function BouquetCanvas({
       onCreated={({ gl }) => onCanvas(gl.domElement)}
       onPointerMissed={() => onSelect(null)}
     >
-      <color attach="background" args={['#eef3f9']} />
-      <ambientLight intensity={0.55} />
-      <hemisphereLight args={['#ffffff', '#cfdcea', 0.7]} />
+      <color attach="background" args={['#0a1122']} />
+      <ambientLight intensity={0.6} />
+      <fog attach="fog" args={['#0a1122', 7, 14]} />
+      <hemisphereLight args={['#cfe0ff', '#0b1324', 0.9]} />
       <directionalLight position={[3, 6, 4]} intensity={1.3} castShadow shadow-mapSize={[1024, 1024]} />
       <directionalLight position={[-4, 2, -3]} intensity={0.4} />
+      {/* đèn viền xanh phía sau cho cảm giác "studio công nghệ" */}
+      <directionalLight position={[0, 3, -5]} intensity={0.9} color="#3d7bff" />
 
       <group position={[0, GROUP_Y, 0]}>
         {wrapper && <Wrapper3D shape={shape} color={wrapper.color} opacity={wrapper.opacity} spread={spread} />}
@@ -239,7 +242,19 @@ export default function BouquetCanvas({
         <Ribbon y={ribY} radius={ribR} color={ribbon} />
       </group>
 
-      <ContactShadows position={[0, -1.55, 0]} opacity={0.35} scale={6} blur={2.5} far={3} />
+      <Grid
+        position={[0, -1.56, 0]}
+        infiniteGrid
+        cellSize={0.25}
+        cellThickness={0.6}
+        cellColor="#1e2b48"
+        sectionSize={1}
+        sectionThickness={1}
+        sectionColor="#2f6bff"
+        fadeDistance={9}
+        fadeStrength={1.5}
+      />
+      <ContactShadows position={[0, -1.55, 0]} opacity={0.6} color="#000000" scale={6} blur={2.5} far={3} />
       <OrbitControls
         ref={controls}
         enablePan={false}

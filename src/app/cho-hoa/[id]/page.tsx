@@ -233,7 +233,7 @@ export default function RequestDetailPage() {
                             ? 'border-blue-300 bg-blue-50/50'
                             : b.status === 'rejected'
                               ? 'border-slate-200 bg-slate-50 opacity-70'
-                              : 'border-slate-200 bg-white'
+                              : 'border-slate-200 bg-surface'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">

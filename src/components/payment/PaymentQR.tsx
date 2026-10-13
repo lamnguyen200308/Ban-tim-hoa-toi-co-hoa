@@ -16,7 +16,7 @@ export function DemoBadge({ className = '' }: { className?: string }) {
 /** Dải cảnh báo DEMO cho các trang liên quan đến thanh toán. */
 export function DemoNotice({ children }: { children?: React.ReactNode }) {
   return (
-    <div role="note" className="rounded-xl border-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+    <div role="note" className="rounded-xl border-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
       <p className="flex items-center gap-2 font-bold">
         <DemoBadge /> Chế độ thử nghiệm — không có giao dịch thật
       </p>
@@ -83,7 +83,7 @@ type Props = {
 export default function PaymentQR({ amount, reference, purpose = 'Số tiền' }: Props) {
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="relative h-44 w-44 shrink-0 overflow-hidden rounded-2xl border-2 border-dashed border-amber-400 bg-white p-2">
+      <div className="relative h-44 w-44 shrink-0 overflow-hidden rounded-2xl border-2 border-dashed border-amber-400 bg-paper p-2">
         <DemoQrArt reference={reference} />
         <span
           className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-[24deg] whitespace-nowrap rounded bg-amber-400/95 px-4 py-1 text-lg font-black tracking-[0.3em] text-amber-950 shadow"

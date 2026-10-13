@@ -160,7 +160,7 @@ export default function DisputePanel({
           {messages.length > 0 && (
             <ul className="space-y-2">
               {messages.map((m) => (
-                <li key={m.id} className={`rounded-xl p-3 text-sm ring-1 ${m.author_role === 'admin' ? 'bg-blue-50 ring-blue-200' : 'bg-white ring-slate-200'}`}>
+                <li key={m.id} className={`rounded-xl p-3 text-sm ring-1 ${m.author_role === 'admin' ? 'bg-blue-50 ring-blue-200' : 'bg-surface ring-slate-200'}`}>
                   <p className="text-xs font-semibold text-slate-500">
                     {ROLE_LABEL[m.author_role]} · {timeAgo(m.created_at)}
                   </p>

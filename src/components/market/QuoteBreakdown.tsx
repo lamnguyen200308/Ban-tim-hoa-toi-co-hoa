@@ -24,7 +24,7 @@ export default function QuoteBreakdown({ bid, compact = false }: { bid: Partial<
   return (
     <div className="space-y-2 text-sm">
       {hasBreakdown && (
-        <dl className="divide-y divide-slate-100 rounded-lg bg-white/70 px-3 ring-1 ring-slate-200">
+        <dl className="divide-y divide-slate-100 rounded-lg bg-raised/70 px-3 ring-1 ring-slate-200">
           {rows.map(([k, v]) => (
             <div key={k} className="flex justify-between py-1.5">
               <dt className="text-slate-500">{k}</dt>

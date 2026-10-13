@@ -303,7 +303,7 @@ export default function Customiser() {
                   e.dataTransfer.setData('text/plain', DRAG_PREFIX + f.id);
                   e.dataTransfer.effectAllowed = 'copy';
                 }}
-                className="flex cursor-grab items-center gap-2 rounded-xl border border-blue-100 bg-white p-2 transition hover:border-blue-300 active:cursor-grabbing"
+                className="flex cursor-grab items-center gap-2 rounded-xl border border-blue-100 bg-surface p-2 transition hover:border-blue-300 active:cursor-grabbing"
               >
                 <FlowerSwatch flower={f} />
                 <div className="min-w-0 flex-1">
@@ -355,7 +355,7 @@ export default function Customiser() {
             }}
           />
           {selected && selectedFlower && (
-            <div className="absolute inset-x-3 top-3 flex flex-wrap items-center gap-2 rounded-2xl bg-white/95 p-2 text-xs shadow-sm ring-1 ring-blue-100">
+            <div className="absolute inset-x-3 top-3 flex flex-wrap items-center gap-2 rounded-2xl bg-raised/95 p-2 text-xs shadow-sm ring-1 ring-blue-100">
               <span className="px-1 font-semibold text-slate-700">
                 ✋ {selectedFlower.name} — kéo để di chuyển
               </span>
@@ -421,7 +421,7 @@ export default function Customiser() {
               </button>
             )}
           </div>
-          <div className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1 text-xs text-slate-500 ring-1 ring-blue-100">
+          <div className="absolute bottom-3 right-3 rounded-full bg-raised/90 px-3 py-1 text-xs text-slate-500 ring-1 ring-blue-100">
             {price.stems}/{MAX_STEMS} cành
           </div>
         </section>
@@ -485,7 +485,7 @@ export default function Customiser() {
                     aria-label={c.name}
                     onClick={() => setRibbon(c.value)}
                     className={`h-7 w-7 rounded-full ring-2 ring-offset-2 transition ${ribbon === c.value ? 'ring-blue-500' : 'ring-transparent'}`}
-                    style={{ background: c.value, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.15)' }}
+                    style={{ background: c.value, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.22)' }}
                   />
                 ))}
               </div>
