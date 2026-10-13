@@ -12,6 +12,14 @@
 body {
   background: var(--page);
   color: #0f172a;
+  font-feature-settings: 'cv11', 'ss01'; /* Inter: số và chữ dễ đọc hơn */
+}
+
+@layer base {
+  h1,
+  h2 {
+    @apply font-display tracking-tight;
+  }
 }
 
 @layer components {

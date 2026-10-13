@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import NotConfigured from '@/components/NotConfigured';
 import { BidStatusBadge, RequestStatusBadge } from '@/components/market/StatusBadge';
+import MyOrders from '@/components/orders/MyOrders';
 import { errMsg, formatVnd, timeAgo } from '@/lib/format';
 import { createClient, supabaseConfigured } from '@/lib/supabase/client';
 import { useProfile } from '@/lib/useProfile';
@@ -97,11 +98,17 @@ export default function AccountPage() {
           </h1>
           <p className="text-sm text-slate-500">{profile?.role === 'shop' ? 'Tài khoản shop hoa' : 'Tài khoản người mua'} · {user.email}</p>
         </div>
-        <button type="button" className="btn-outline" onClick={logout}>Đăng xuất</button>
+        <div className="flex flex-wrap gap-2">
+          {profile?.is_admin && (
+            <Link href="/quan-tri" className="btn-dark">🛠️ Trang quản trị</Link>
+          )}
+          <button type="button" className="btn-outline" onClick={logout}>Đăng xuất</button>
+        </div>
       </div>
 
       {profile?.role === 'shop' ? (
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          <MyOrders userId={user.id} role="shop" />
           <form onSubmit={saveShop} className="card space-y-3 p-6">
             <h2 className="text-lg font-bold">Thông tin shop</h2>
             <p className="text-xs text-slate-500">
@@ -162,6 +169,7 @@ export default function AccountPage() {
         </div>
       ) : (
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          <MyOrders userId={user.id} role="customer" />
           <div className="card p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Yêu cầu của tôi</h2>

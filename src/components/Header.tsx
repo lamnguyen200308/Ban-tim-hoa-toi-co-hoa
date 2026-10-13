@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useProfile } from '@/lib/useProfile';
 
-type Tab = { href: string; label: string; icon: string; match: (p: string) => boolean; hideForShop?: boolean };
+type Tab = { href: string; label: string; icon: string; match: (p: string) => boolean; hideForShop?: boolean; adminOnly?: boolean };
 
 const TABS: Tab[] = [
   { href: '/', label: 'Trang chủ', icon: '🏠', match: (p) => p === '/' },
@@ -23,14 +23,20 @@ const TABS: Tab[] = [
     match: (p) => p.startsWith('/cho-hoa/dang-yeu-cau'),
     hideForShop: true,
   },
-  { href: '/tai-khoan', label: 'Tài khoản', icon: '👤', match: (p) => p.startsWith('/tai-khoan') || p.startsWith('/dang-nhap') },
+  {
+    href: '/tai-khoan',
+    label: 'Tài khoản',
+    icon: '👤',
+    match: (p) => p.startsWith('/tai-khoan') || p.startsWith('/dang-nhap') || p.startsWith('/don-hang'),
+  },
+  { href: '/quan-tri', label: 'Quản trị', icon: '🛠️', match: (p) => p.startsWith('/quan-tri'), adminOnly: true },
 ];
 
 export default function Header() {
   const pathname = usePathname() ?? '/';
   const { user, profile } = useProfile();
   const isShop = profile?.role === 'shop';
-  const tabs = TABS.filter((t) => !(isShop && t.hideForShop));
+  const tabs = TABS.filter((t) => !(isShop && t.hideForShop) && (!t.adminOnly || profile?.is_admin));
 
   return (
     <header className="sticky top-0 z-30 bg-[var(--ink)] text-white shadow-lg shadow-black/10">
@@ -39,7 +45,7 @@ export default function Header() {
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-emerald-400 text-lg" aria-hidden>
             🌸
           </span>
-          <span className="hidden leading-tight sm:inline">
+          <span className="hidden font-display text-lg leading-tight sm:inline">
             Bạn tìm hoa, <span className="text-emerald-400">tôi có hoa</span>
           </span>
         </Link>

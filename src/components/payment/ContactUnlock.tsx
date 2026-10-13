@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import PaymentQR from '@/components/payment/PaymentQR';
+import PaymentQR, { DemoBadge, DemoNotice } from '@/components/payment/PaymentQR';
 import { errMsg } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { ContactUnlock as Unlock, Counterpart } from '@/lib/types';
@@ -73,7 +73,13 @@ export default function ContactUnlock({ requestId, viewerRole }: { requestId: st
   if (unlock?.status === 'paid' && contact) {
     return (
       <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm ring-1 ring-emerald-200">
-        <p className="font-semibold text-emerald-800">🔓 Thông tin {other}</p>
+        <p className="flex flex-wrap items-center gap-2 font-semibold text-emerald-800">
+          🔓 Thông tin {other}
+          {unlock.paid_via === 'demo' && <DemoBadge />}
+        </p>
+        {unlock.paid_via === 'demo' && (
+          <p className="text-xs text-amber-800">Mở bằng thanh toán MÔ PHỎNG — không có tiền thật được chuyển.</p>
+        )}
         <p className="mt-1">{viewerRole === 'customer' ? '🏪' : '👤'} {contact.name || '—'}</p>
         <p>📞 {contact.phone || 'Chưa cập nhật số điện thoại'}</p>
         {contact.address && <p>🏠 {contact.address}</p>}
@@ -97,26 +103,26 @@ export default function ContactUnlock({ requestId, viewerRole }: { requestId: st
       {!unlock ? (
         <>
           <p className="mt-3 text-slate-600">
-            Quét QR thanh toán{fee !== null ? ' ' + new Intl.NumberFormat('vi-VN').format(fee) + ' ₫' : ''} để xem tên và số điện thoại
-            của {other}.
+            Thanh toán phí{fee !== null ? ' ' + new Intl.NumberFormat('vi-VN').format(fee) + ' ₫' : ''} để xem tên và số điện thoại
+            của {other}.{demo && ' Hiện đang ở chế độ thử nghiệm: phí chỉ là mô phỏng.'}
           </p>
           <button type="button" className="btn-primary mt-3 w-full" disabled={busy} onClick={start}>
-            📱 Lấy mã QR thanh toán
+            📱 Xem mã QR {demo ? '(demo)' : ''}
           </button>
         </>
       ) : (
         <div className="mt-3 space-y-3">
-          <PaymentQR amount={unlock.amount} reference={unlock.payment_ref} />
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-outline !px-4 !py-1.5 text-xs" disabled={busy} onClick={refresh}>
-              🔄 Tôi đã thanh toán — kiểm tra
+          <DemoNotice>Phí mở thông tin chỉ là số tiền mô phỏng.</DemoNotice>
+          <PaymentQR amount={unlock.amount} reference={unlock.payment_ref} purpose="Phí mở thông tin" />
+          {demo ? (
+            <button type="button" className="btn-accent w-full" disabled={busy} onClick={simulatePaid}>
+              🧪 Mô phỏng thanh toán thành công
             </button>
-            {demo && (
-              <button type="button" className="btn-accent !px-4 !py-1.5 text-xs" disabled={busy} onClick={simulatePaid}>
-                🧪 Giả lập đã quét QR (chế độ thử)
-              </button>
-            )}
-          </div>
+          ) : (
+            <p className="rounded-xl bg-slate-100 p-3 text-xs text-slate-600">
+              Chế độ demo đang tắt và website chưa nối cổng thanh toán thật, nên chưa thể thanh toán bước này.
+            </p>
+          )}
         </div>
       )}
       {error && <p className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-700">{error}</p>}

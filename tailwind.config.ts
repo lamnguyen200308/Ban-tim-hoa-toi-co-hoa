@@ -5,7 +5,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Be Vietnam Pro"', 'system-ui', 'sans-serif'],
+        // Inter: chữ thường, gọn và dễ đọc · Playfair Display: tiêu đề, sang trọng hợp shop hoa
+        sans: ['Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
+        display: ['"Playfair Display"', 'Georgia', 'serif'],
       },
       keyframes: {
         pop: {

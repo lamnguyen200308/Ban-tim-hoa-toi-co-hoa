@@ -6,6 +6,10 @@ Sàn hoa tươi với 2 tính năng chính:
 2. **Chợ hoa** (`/cho-hoa`) — khách đăng mô tả + ảnh (hoặc thiết kế 3D) → các shop hoa báo giá (ẩn danh: *Shop A, Shop B…*), có thể hạ giá để cạnh tranh → khách chấp nhận / từ chối. Báo giá mới hiện ngay (Supabase Realtime).
 3. **Giữ kín thông tin** — khách và shop không thấy tên / SĐT / địa chỉ của nhau. Sau khi chốt báo giá, mỗi bên **quét QR thanh toán** để mở thông tin liên hệ của bên kia.
 4. **Mẫu đã lưu** (`/mau-da-luu`) — chưa đăng nhập vẫn thiết kế và lưu mẫu trên trình duyệt; đăng nhập để đăng lên Chợ hoa.
+5. **Đơn hàng** (`/don-hang/<id>`) — khách chấp nhận báo giá → đơn hàng (lưu nguyên báo giá đã chốt) → đặt cọc **DEMO** → shop xác nhận, chuẩn bị, giao → khách xác nhận hoàn tất. Có lịch sử trạng thái và khiếu nại kèm ảnh bằng chứng.
+6. **Quản trị** (`/quan-tri`) — tổng quan, đơn hàng, khiếu nại, yêu cầu & báo giá, người dùng, cấu hình (tỷ lệ cọc, phí dịch vụ, bật/tắt demo), nhật ký thay đổi.
+
+> ⚠️ **Thanh toán hiện CHỈ LÀ DEMO.** Mã QR là hình minh hoạ không quét được, không gắn tài khoản ngân hàng nào. Mọi khoản cọc, phí dịch vụ, hoàn tiền đều là số liệu mô phỏng (`payment_mode = 'demo'`, `paid_via = 'demo'`) và không được tính là doanh thu thật.
 
 **Công nghệ:** Next.js 14 (App Router) · React Three Fiber · Tailwind CSS · Supabase (Postgres, Auth, Storage, Realtime) · Vercel.
 
@@ -28,6 +32,7 @@ npm run dev                   # http://localhost:3000
    - `supabase/migrations/0001_init.sql` — bảng, phân quyền (RLS), hàm chấp nhận báo giá, bucket ảnh, realtime
    - `supabase/seed.sql` — danh mục hoa / giấy gói / kiểu gói mẫu
    - `supabase/migrations/0002_privacy_unlock_quota.sql` — ẩn thông tin, mở khoá bằng QR, giới hạn số đơn được xem
+   - `supabase/migrations/0003_orders_demo_payment_admin.sql` — đơn hàng, đặt cọc demo, khiếu nại, quản trị viên, báo giá chi tiết
 3. **Project Settings → API**: copy `Project URL` và `anon public key` vào `.env.local`.
 4. **Authentication → URL Configuration**:
    - Site URL: `https://<tên-miền-vercel-của-bạn>`
@@ -42,6 +47,14 @@ npm run dev                   # http://localhost:3000
 ### Dữ liệu mẫu để thử
 Chạy `supabase/demo_data.sql` trong SQL Editor: tạo 2 khách, 1 shop (đã xác nhận email, mật khẩu `Demo@12345`) và 20 đơn hoa. Đăng nhập bằng `khach1@demo.test`, `khach2@demo.test` hoặc `shop1@demo.test`. Đơn *“Tulip vàng tặng mẹ”* của khách 1 đã chốt shop để thử QR. Cuối file có lệnh xoá dữ liệu mẫu.
 
+### Quản trị viên
+Sau khi chạy `0003`, đặt tài khoản của bạn làm admin (chạy 1 lần trong SQL Editor):
+```sql
+update public.profiles set is_admin = true
+ where id = (select id from auth.users where email = 'email-cua-ban@gmail.com');
+```
+Muốn thử nhanh: chạy `supabase/demo_admin.sql` → đăng nhập `admin@demo.test` / `Demo@12345`. Tab **🛠️ Quản trị** chỉ hiện với admin; mọi hàm quản trị đều kiểm tra quyền trong database.
+
 ### Thanh toán mở thông tin & giới hạn xem đơn
 Sửa trong bảng `app_settings` (1 dòng):
 
@@ -50,12 +63,16 @@ Sửa trong bảng `app_settings` (1 dòng):
 | `guest_quota` | 3 | Số đơn mới nhất người chưa đăng nhập được xem |
 | `member_quota` | 13 | Đã đăng nhập (3 + 10) |
 | `unlock_fee_customer` / `unlock_fee_shop` | 10.000 / 20.000 | Phí mở thông tin liên hệ (giá tạm, đổi tuỳ ý) |
-| `payment_demo` | `true` | Hiện nút *Giả lập đã quét QR* để thử. **Đặt `false` khi chạy thật.** |
+| `payment_demo` | `true` | Chế độ DEMO: hiện QR minh hoạ + nút *Mô phỏng thanh toán thành công*. Tắt thì ẩn nút mô phỏng — nhưng vẫn chưa nhận được tiền thật cho tới khi nối cổng thanh toán. |
+| `deposit_percent` | 30 | Tỷ lệ đặt cọc (%) cho đơn mới. VD: đơn 600.000 ₫ → cọc 180.000 ₫ |
+| `service_fee` | 50.000 | Phí dịch vụ nền tảng, chỉ ghi nhận khi đơn **hoàn tất** |
+
+Nên sửa các giá trị này ở **Quản trị → Cấu hình** (có ghi nhật ký) thay vì Table Editor.
 
 Muốn cho một tài khoản xem thêm đơn (gói trả phí sau này): tăng `profiles.extra_quota`.
 
-**Mã QR:** đang là placeholder trong `src/components/payment/PaymentQR.tsx` — thay bằng QR của bạn (VietQR, MoMo…), nhớ đưa `reference` (mã `BTH…`) vào nội dung chuyển khoản.
-**Xác nhận thanh toán:** cổng thanh toán gọi `POST /api/payment/webhook` với header `x-webhook-secret` và JSON `{ "content": "...BTH...", "amount": 10000 }`. Cần thêm `SUPABASE_SERVICE_ROLE_KEY` và `PAYMENT_WEBHOOK_SECRET` (không có tiền tố `NEXT_PUBLIC_`) trên Vercel. Sửa phần đọc body cho khớp với cổng bạn dùng.
+**Mã QR:** `src/components/payment/PaymentQR.tsx` vẽ QR **minh hoạ** (cố ý thiếu 1 ô định vị nên không máy quét nào đọc được) kèm cảnh báo *“QR DEMO – Chỉ dùng để thử nghiệm. Không chuyển tiền thật.”* **Đừng** thay bằng QR ngân hàng khi chưa có cổng thanh toán và chưa tắt demo.
+**Xác nhận thanh toán (sau này):** cổng thanh toán gọi `POST /api/payment/webhook` với header `x-webhook-secret` và JSON `{ "content": "...BTH...", "amount": 10000 }`. Cần thêm `SUPABASE_SERVICE_ROLE_KEY` và `PAYMENT_WEBHOOK_SECRET` (không có tiền tố `NEXT_PUBLIC_`) trên Vercel. Sửa phần đọc body cho khớp với cổng bạn dùng.
 
 ### Quản lý danh mục & giá
 Sửa trực tiếp trong **Table Editor** của Supabase: bảng `flowers` (hoa, giá/cành), `wrappers` (giấy gói, giá/tờ), `wrap_styles` (kiểu gói, công gói). Đặt `active = false` để ẩn. Cột `kind` quyết định hình 3D: `rose, tulip, sunflower, daisy, carnation, hydrangea, baby, orchid, foliage`.
@@ -81,17 +98,22 @@ src/
     cho-hoa/[id]/             Chi tiết + báo giá realtime
     dang-nhap/                Đăng nhập / đăng ký (khách hoặc shop)
     mau-da-luu/               Mẫu đã lưu (trên máy + trong tài khoản)
+    don-hang/[id]/            Chi tiết đơn: tiến trình, đặt cọc DEMO, khiếu nại, lịch sử
+    quan-tri/                 Trang quản trị (chỉ admin)
     tai-khoan/                Yêu cầu, thiết kế, báo giá, thông tin shop
     api/payment/webhook/      Nhận xác nhận thanh toán (placeholder)
     auth/callback/            Xác nhận email
   components/customiser/      Cảnh 3D: hoa, giấy gói, ruy băng, giao diện
   components/market/          Form yêu cầu, form báo giá, thẻ thiết kế
-  components/payment/         QR thanh toán (placeholder), khung mở thông tin
+  components/payment/         QR DEMO (minh hoạ), khung mở thông tin
+  components/orders/          Đặt cọc demo, khiếu nại, danh sách đơn, nhãn trạng thái
   lib/                        Supabase client, giá, danh mục, kiểu dữ liệu
 supabase/
   migrations/0001_init.sql
   migrations/0002_privacy_unlock_quota.sql
+  migrations/0003_orders_demo_payment_admin.sql
   seed.sql
+  demo_data.sql · demo_admin.sql   Dữ liệu & tài khoản mẫu (chỉ để thử)
 ```
 
 ## 5. Quy tắc nghiệp vụ (đã cài trong database)
@@ -108,6 +130,16 @@ supabase/
 | Không ghi SĐT / email vào yêu cầu và báo giá | Trigger `guard_no_contact` |
 | Người dùng không tự đổi role / rating shop | Quyền UPDATE theo cột |
 | Ảnh chỉ upload vào thư mục của chính mình | Storage policy theo `auth.uid()` |
+| Báo giá: tổng = giá hoa + thiết kế + giao hàng; báo giá hết hạn không chấp nhận được | Constraint `bids_price_breakdown`, `accept_bid()` |
+| Chấp nhận báo giá → tạo đơn, lưu nguyên báo giá đã chốt | `accept_bid()` → `create_order_for_bid()` |
+| Đặt cọc demo chỉ do khách bấm, chỉ khi demo bật; không tự xác nhận khi mở trang | `demo_pay_deposit()` |
+| Trạng thái đơn chỉ chuyển theo đúng quy trình và vai trò; shop không tự “hoàn tất” | `order_transition()` |
+| Trạng thái đơn và thanh toán lưu riêng; người dùng không sửa trực tiếp bảng `orders` | Thu hồi quyền INSERT/UPDATE/DELETE |
+| Huỷ sau khi cọc không mặc định mất cọc — chờ admin xem xét | `order_transition()` ghi `deposit_note` |
+| Khiếu nại: hai bên gửi giải trình + ảnh (bucket riêng tư); chỉ admin quyết định, lưu lý do & người xử lý | `open_dispute()`, `add_dispute_message()`, `resolve_dispute()` |
+| Phí dịch vụ chỉ ghi khi đơn hoàn tất; số liệu demo tách khỏi doanh thu thật | `orders.service_fee`, `admin_overview()` |
+| Địa chỉ giao hàng chỉ khách thấy; shop thấy sau khi mở thông tin | Bảng `request_private` + `get_counterpart_contact()` |
+| Chỉ admin xem/đổi cấu hình, có nhật ký | `admin_*()` kiểm tra `is_admin()`, bảng `audit_log` |
 
 **Đấu giá công khai:** ai xem được yêu cầu thì thấy giá các shop (nhưng không biết shop là ai).
 

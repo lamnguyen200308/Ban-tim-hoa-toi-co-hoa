@@ -7,6 +7,7 @@ import NotConfigured from '@/components/NotConfigured';
 import BidForm from '@/components/market/BidForm';
 import ContactUnlock from '@/components/payment/ContactUnlock';
 import DesignCard from '@/components/market/DesignCard';
+import QuoteBreakdown, { isExpired } from '@/components/market/QuoteBreakdown';
 import { BidStatusBadge, RequestStatusBadge } from '@/components/market/StatusBadge';
 import { anonShopLabel } from '@/lib/contact';
 import { budgetText, errMsg, formatDate, formatVnd, timeAgo } from '@/lib/format';
@@ -24,6 +25,8 @@ export default function RequestDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeImg, setActiveImg] = useState(0);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [address, setAddress] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -48,6 +51,13 @@ export default function RequestDetailPage() {
     ]);
     setBids((b ?? []) as Bid[]);
     setDesign((d.data as BouquetDesign | null) ?? null);
+    // Đơn hàng (chỉ khách, shop thắng, admin đọc được) & địa chỉ giao (chỉ chủ yêu cầu, admin)
+    const [{ data: o }, { data: rp }] = await Promise.all([
+      supabase.from('orders').select('id').eq('request_id', id).maybeSingle(),
+      supabase.from('request_private').select('delivery_address').eq('request_id', id).maybeSingle(),
+    ]);
+    setOrderId((o as { id: string } | null)?.id ?? null);
+    setAddress((rp as { delivery_address: string | null } | null)?.delivery_address ?? null);
     setLoading(false);
   }, [id]);
 
@@ -100,7 +110,9 @@ export default function RequestDetailPage() {
   const rpc = async (fn: 'accept_bid' | 'reject_bid', bidId: string) => {
     if (
       fn === 'accept_bid' &&
-      !confirm('Chấp nhận báo giá này? Các báo giá còn lại sẽ tự động bị từ chối. Sau đó bạn quét QR thanh toán để xem thông tin shop.')
+      !confirm(
+        'Chấp nhận báo giá này? Hệ thống tạo đơn hàng và lưu lại nguyên nội dung báo giá. Các báo giá còn lại tự động bị từ chối.',
+      )
     )
       return;
     setBusyId(bidId);
@@ -151,6 +163,12 @@ export default function RequestDetailPage() {
               <span className="text-xs text-slate-500">Đăng {timeAgo(req.created_at)}</span>
             </div>
             <h1 className="text-2xl font-extrabold text-slate-800">{req.title}</h1>
+            {(req.occasion || req.size_note) && (
+              <div className="flex flex-wrap gap-2">
+                {req.occasion && <span className="chip">🎁 {req.occasion}</span>}
+                {req.size_note && <span className="chip-green">📏 {req.size_note}</span>}
+              </div>
+            )}
             <dl className="grid gap-3 text-sm sm:grid-cols-3">
               <div className="rounded-xl bg-blue-50/60 p-3">
                 <dt className="text-xs text-slate-500">Ngân sách</dt>
@@ -158,7 +176,10 @@ export default function RequestDetailPage() {
               </div>
               <div className="rounded-xl bg-blue-50/60 p-3">
                 <dt className="text-xs text-slate-500">Cần ngày</dt>
-                <dd className="font-semibold">{formatDate(req.needed_by)}</dd>
+                <dd className="font-semibold">
+                  {formatDate(req.needed_by)}
+                  {req.needed_time && <span className="font-normal text-slate-600"> · {req.needed_time}</span>}
+                </dd>
               </div>
               <div className="rounded-xl bg-blue-50/60 p-3">
                 <dt className="text-xs text-slate-500">Khu vực</dt>
@@ -166,6 +187,16 @@ export default function RequestDetailPage() {
               </div>
             </dl>
             <p className="whitespace-pre-line text-slate-700">{req.description}</p>
+            {req.card_message && (
+              <p className="rounded-xl bg-emerald-50/70 p-3 text-sm text-slate-700">
+                💌 <span className="text-slate-500">Lời nhắn / yêu cầu đặc biệt:</span> {req.card_message}
+              </p>
+            )}
+            {address && (
+              <p className="rounded-xl bg-slate-50 p-3 text-sm">
+                🏠 <span className="text-slate-500">Địa chỉ giao (chỉ bạn thấy):</span> {address}
+              </p>
+            )}
             {design && <DesignCard design={design} />}
             {isOwner && req.status === 'open' && (
               <button type="button" onClick={closeRequest} className="text-sm text-slate-500 underline hover:text-blue-700">
@@ -220,13 +251,17 @@ export default function RequestDetailPage() {
                           {best && <span className="chip">Giá tốt nhất</span>}
                         </div>
                       </div>
-                      {b.message && <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{b.message}</p>}
-                      {b.delivery_note && <p className="mt-1 text-xs text-slate-500">🚚 {b.delivery_note}</p>}
+                      <div className="mt-2">
+                        <QuoteBreakdown bid={b} />
+                      </div>
                       <div className="mt-2">
                         <BidStatusBadge status={b.status} />
                       </div>
 
-                      {isOwner && req.status === 'open' && b.status === 'pending' && (
+                      {isOwner && req.status === 'open' && b.status === 'pending' && isExpired(b) && (
+                        <p className="mt-2 text-xs text-slate-500">Báo giá đã hết hạn — chờ shop cập nhật lại để chấp nhận.</p>
+                      )}
+                      {isOwner && req.status === 'open' && b.status === 'pending' && !isExpired(b) && (
                         <div className="mt-3 flex gap-2">
                           <button type="button" disabled={busyId === b.id} className="btn-primary !px-4 !py-1.5 text-xs" onClick={() => rpc('accept_bid', b.id)}>
                             ✅ Chấp nhận
@@ -237,6 +272,11 @@ export default function RequestDetailPage() {
                         </div>
                       )}
 
+                      {b.status === 'accepted' && orderId && (
+                        <Link href={`/don-hang/${orderId}`} className="btn-primary mt-3 w-full">
+                          📋 Xem đơn hàng & đặt cọc (demo)
+                        </Link>
+                      )}
                       {b.status === 'accepted' && isOwner && <ContactUnlock requestId={req.id} viewerRole="customer" />}
                       {b.status === 'accepted' && b.shop_id === user?.id && (
                         <>

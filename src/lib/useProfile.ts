@@ -25,8 +25,12 @@ export function useProfile(): State {
       } = await supabase.auth.getUser();
       let profile: Profile | null = null;
       if (user) {
-        const { data } = await supabase.from('profiles').select('id, role, display_name, phone').eq('id', user.id).maybeSingle();
-        profile = (data as Profile | null) ?? null;
+        const full = await supabase.from('profiles').select('id, role, display_name, phone, is_admin').eq('id', user.id).maybeSingle();
+        // Chưa chạy migration 0003 (chưa có cột is_admin) → vẫn đọc được profile
+        const res = full.error
+          ? await supabase.from('profiles').select('id, role, display_name, phone').eq('id', user.id).maybeSingle()
+          : full;
+        profile = (res.data as Profile | null) ?? null;
       }
       if (active) setState({ loading: false, user, profile });
     };

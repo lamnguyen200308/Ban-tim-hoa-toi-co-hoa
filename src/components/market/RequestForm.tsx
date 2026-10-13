@@ -29,6 +29,11 @@ export default function RequestForm() {
     needed_by: '',
     district: '',
     city: 'TP. Hồ Chí Minh',
+    occasion: '',
+    size_note: '',
+    needed_time: '',
+    card_message: '',
+    delivery_address: '',
   });
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -81,7 +86,7 @@ export default function RequestForm() {
     }
     const min = form.budget_min ? Math.round(Number(form.budget_min)) : null;
     const max = form.budget_max ? Math.round(Number(form.budget_max)) : null;
-    if (containsContact(form.title, form.description)) {
+    if (containsContact(form.title, form.description, form.size_note, form.card_message, form.occasion)) {
       setError(CONTACT_WARNING);
       return;
     }
@@ -114,10 +119,21 @@ export default function RequestForm() {
           city: form.city.trim() || null,
           design_id: design?.id ?? null,
           image_urls: urls,
+          occasion: form.occasion.trim() || null,
+          size_note: form.size_note.trim() || null,
+          needed_time: form.needed_time.trim() || null,
+          card_message: form.card_message.trim() || null,
         })
         .select('id')
         .single();
       if (insErr) throw insErr;
+      // Địa chỉ giao hàng lưu riêng: chỉ bạn thấy; shop thắng chỉ thấy sau khi đã mở thông tin
+      if (form.delivery_address.trim()) {
+        const { error: addrErr } = await supabase
+          .from('request_private')
+          .insert({ request_id: data.id, delivery_address: form.delivery_address.trim() });
+        if (addrErr) alert('Đã đăng yêu cầu nhưng chưa lưu được địa chỉ giao hàng: ' + errMsg(addrErr));
+      }
       router.push(`/cho-hoa/${data.id}`);
     } catch (err) {
       setError('Không đăng được: ' + errMsg(err));
@@ -155,6 +171,16 @@ export default function RequestForm() {
 
       <form onSubmit={onSubmit} className="card mt-6 space-y-5 p-6">
         {design && <DesignCard design={design} />}
+
+        <div>
+          <label className="label" htmlFor="occasion">Dịp tặng / mục đích</label>
+          <input id="occasion" className="input" list="occasions" maxLength={80} placeholder="VD: Sinh nhật" value={form.occasion} onChange={set('occasion')} />
+          <datalist id="occasions">
+            {['Sinh nhật', 'Kỷ niệm', 'Tỏ tình / cầu hôn', 'Khai trương', 'Tốt nghiệp', 'Chúc mừng', 'Chia buồn', 'Tặng mẹ / thầy cô', 'Trang trí'].map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
+        </div>
 
         <div>
           <label className="label" htmlFor="title">Tiêu đề *</label>
@@ -208,9 +234,17 @@ export default function RequestForm() {
             <label className="label" htmlFor="bmax">Ngân sách đến (₫)</label>
             <input id="bmax" type="number" min={0} step={10000} className="input" value={form.budget_max} onChange={set('budget_max')} />
           </div>
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="size_note">Số lượng / kích thước</label>
+            <input id="size_note" className="input" maxLength={200} placeholder="VD: 20 bông, bó cỡ vừa (~40cm)" value={form.size_note} onChange={set('size_note')} />
+          </div>
           <div>
             <label className="label" htmlFor="needed">Cần hoa ngày</label>
             <input id="needed" type="date" className="input" value={form.needed_by} onChange={set('needed_by')} />
+          </div>
+          <div>
+            <label className="label" htmlFor="needed_time">Khung giờ giao</label>
+            <input id="needed_time" className="input" maxLength={60} placeholder="VD: 9:00–11:00" value={form.needed_time} onChange={set('needed_time')} />
           </div>
           <div>
             <label className="label" htmlFor="district">Quận / huyện</label>
@@ -219,6 +253,15 @@ export default function RequestForm() {
           <div className="sm:col-span-2">
             <label className="label" htmlFor="city">Tỉnh / thành phố</label>
             <input id="city" className="input" value={form.city} onChange={set('city')} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="delivery_address">Địa chỉ giao hàng</label>
+            <input id="delivery_address" className="input" maxLength={300} placeholder="Số nhà, đường, phường" value={form.delivery_address} onChange={set('delivery_address')} />
+            <p className="mt-1 text-xs text-slate-500">🔒 Chỉ bạn thấy. Shop được chọn chỉ thấy sau khi đã mở thông tin liên hệ.</p>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="card_message">Lời nhắn trên thiệp & yêu cầu đặc biệt</label>
+            <textarea id="card_message" className="input min-h-[70px]" maxLength={500} placeholder="VD: “Chúc mẹ luôn khoẻ!” — không dùng hoa có mùi hắc" value={form.card_message} onChange={set('card_message')} />
           </div>
         </div>
 
