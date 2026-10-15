@@ -7,10 +7,10 @@ import { BidStatusBadge, RequestStatusBadge } from '@/components/market/StatusBa
 import { OrderStatusBadge, PaymentBadge } from '@/components/orders/OrderBadges';
 import { DemoBadge, DemoNotice } from '@/components/payment/PaymentQR';
 import { errMsg, formatVnd, timeAgo } from '@/lib/format';
-import { ORDER_STATUS } from '@/lib/orders';
+import { DEPOSIT_STATUS, FEE_STATUS, ORDER_STATUS } from '@/lib/orders';
 import { createClient, supabaseConfigured } from '@/lib/supabase/client';
 import { useProfile } from '@/lib/useProfile';
-import type { AppSettings, Bid, OrderStatus, PaymentStatus, RequestSummary } from '@/lib/types';
+import type { AppSettings, Bid, DepositStatus, OrderStatus, PaymentStatus, PlatformFeeStatus, RequestSummary } from '@/lib/types';
 
 /*
  * Trang quản trị cho chủ website. Mọi dữ liệu lấy qua hàm admin_* trong database,
@@ -31,6 +31,10 @@ type Overview = {
   expected_fees: number;
   real_fees: number;
   real_unlock_revenue: number;
+  awaiting_deposit_verification?: number;
+  awaiting_platform_fee?: number;
+  conditions_overdue?: number;
+  contacts_unlocked?: number;
 };
 
 type AdminOrder = {
@@ -48,6 +52,12 @@ type AdminOrder = {
   deposit_note: string | null;
   open_dispute: string | null;
   updated_at: string;
+  deposit_status?: DepositStatus;
+  platform_fee_amount?: number | null;
+  platform_fee_status?: PlatformFeeStatus;
+  contact_unlocked_at?: string | null;
+  evidence_count?: number;
+  needs_attention?: boolean;
 };
 
 type AdminUser = {
@@ -66,6 +76,7 @@ type AuditRow = { id: number; action: string; target: string | null; details: Re
 
 const TABS = [
   ['overview', '📊 Tổng quan'],
+  ['verify', '🔎 Chờ xác minh'],
   ['disputes', '⚖️ Khiếu nại'],
   ['orders', '📋 Đơn hàng'],
   ['market', '🛎️ Yêu cầu & báo giá'],
@@ -159,8 +170,12 @@ export default function AdminPage() {
       p_guest_quota: settings.guest_quota,
       p_member_quota: settings.member_quota,
     });
-    setSaved(error ? 'Lỗi: ' + errMsg(error) : 'Đã lưu ✔ (có ghi vào nhật ký)');
-    if (!error) load();
+    let err = error;
+    if (!err && settings.condition_review_hours) {
+      ({ error: err } = await createClient().rpc('admin_update_review_hours', { p_hours: settings.condition_review_hours }));
+    }
+    setSaved(err ? 'Lỗi: ' + errMsg(err) : 'Đã lưu ✔ (có ghi vào nhật ký)');
+    if (!err) load();
   };
 
   const withdrawBid = async (id: string) => {
@@ -194,6 +209,18 @@ export default function AdminPage() {
   );
 
   const disputed = orders.filter((o) => o.open_dispute || o.status === 'disputed');
+  // Đơn chưa mở liên hệ, còn chạy, đang chờ một trong hai điều kiện — đơn quá hạn xem xét lên đầu
+  const awaiting = orders
+    .filter(
+      (o) =>
+        !o.contact_unlocked_at &&
+        !['cancelled', 'completed'].includes(o.status) &&
+        (o.deposit_status === 'pending_verification' ||
+          o.deposit_status === 'disputed' ||
+          o.platform_fee_status !== 'verified_demo' ||
+          o.needs_attention),
+    )
+    .sort((a, b) => Number(!!b.needs_attention) - Number(!!a.needs_attention));
   const shownOrders = statusFilter ? orders.filter((o) => o.status === statusFilter) : orders;
 
   return (
@@ -209,7 +236,7 @@ export default function AdminPage() {
           <DemoNotice>Chế độ demo đang BẬT: mọi khoản cọc, phí, hoàn tiền là số liệu mô phỏng — không phải doanh thu thật.</DemoNotice>
         </div>
       )}
-      {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error} — đã chạy migration 0003 chưa?</p>}
+      {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error} — đã chạy migration 0003 và 0004 chưa?</p>}
 
       <nav className="mt-6 flex gap-1 overflow-x-auto [scrollbar-width:none]" aria-label="Mục quản trị">
         {TABS.map(([k, label]) => (
@@ -222,6 +249,7 @@ export default function AdminPage() {
             }`}
           >
             {label}
+            {k === 'verify' && awaiting.length > 0 && <span className="ml-1.5 rounded-full bg-blue-500 px-1.5 text-xs text-white">{awaiting.length}</span>}
             {k === 'disputes' && disputed.length > 0 && <span className="ml-1.5 rounded-full bg-red-500 px-1.5 text-xs text-white">{disputed.length}</span>}
           </button>
         ))}
@@ -243,24 +271,47 @@ export default function AdminPage() {
               </div>
             </section>
             <section>
+              <h2 className="panel-title">Mở liên hệ (cọc + phí nền tảng)</h2>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <Stat label="Chờ xác minh cọc" value={overview.awaiting_deposit_verification ?? 0} />
+                <Stat label="Chờ phí nền tảng" value={overview.awaiting_platform_fee ?? 0} />
+                <Stat
+                  label="Quá hạn xem xét"
+                  value={overview.conditions_overdue ?? 0}
+                  hint={`Chờ quá ${settings?.condition_review_hours ?? 48} giờ — chỉ nhắc, không tự xử lý`}
+                />
+                <Stat label="Đã mở liên hệ" value={overview.contacts_unlocked ?? 0} />
+              </div>
+            </section>
+            <section>
               <h2 className="panel-title flex items-center gap-2">
                 Số liệu thử nghiệm <DemoBadge />
               </h2>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Stat tone="demo" label="Tiền cọc mô phỏng đang giữ" value={formatVnd(overview.demo_deposits)} hint="Không phải tiền thật, không phải doanh thu" />
-                <Stat tone="demo" label="Phí dịch vụ mô phỏng" value={formatVnd(overview.demo_fees)} hint="Từ đơn demo đã hoàn tất" />
-                <Stat tone="demo" label="Lượt mở thông tin mô phỏng" value={overview.demo_unlocks} />
-                <Stat label="Phí dự kiến (đơn đang chạy)" value={formatVnd(overview.expected_fees)} hint="Chưa phải doanh thu" />
+                <Stat tone="demo" label="Cọc mô phỏng đã xác nhận" value={formatVnd(overview.demo_deposits)} hint="Tiền của shop — không phải doanh thu Flomal" />
+                <Stat tone="demo" label="Phí nền tảng mô phỏng" value={formatVnd(overview.demo_fees)} hint="Không phải doanh thu thật" />
+                <Stat tone="demo" label="Lượt mở liên hệ (demo)" value={overview.demo_unlocks} />
+                <Stat label="Phí nền tảng chưa thu" value={formatVnd(overview.expected_fees)} hint="Đơn đang chạy — chưa phải doanh thu" />
               </div>
             </section>
             <section>
               <h2 className="panel-title">Doanh thu thật</h2>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Stat tone="real" label="Phí dịch vụ thật" value={formatVnd(overview.real_fees)} hint="Chỉ từ đơn không phải demo" />
-                <Stat tone="real" label="Phí mở thông tin thật" value={formatVnd(overview.real_unlock_revenue)} hint="Chỉ qua cổng thanh toán" />
+                <Stat tone="real" label="Phí nền tảng thật" value={formatVnd(overview.real_fees)} hint="Chỉ đơn thật đã đối soát" />
+                <Stat tone="real" label="Phí mở thông tin thật (cũ)" value={formatVnd(overview.real_unlock_revenue)} hint="Đã ngừng dùng" />
               </div>
               <p className="mt-2 text-xs text-slate-500">Website chưa nối cổng thanh toán, nên doanh thu thật hiện luôn là 0 ₫.</p>
             </section>
+          </div>
+        )}
+
+        {tab === 'verify' && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              Đơn chưa mở liên hệ đang chờ cọc hoặc phí nền tảng. Mở đơn để xem bằng chứng, lịch sử và xác nhận / từ chối (có ghi lý do).
+              Hệ thống không tự phạt, khoá hay mở liên hệ khi quá hạn.
+            </p>
+            <AdminOrderList orders={awaiting} empty="Không có đơn nào đang chờ xác minh. 🎉" />
           </div>
         )}
 
@@ -384,12 +435,14 @@ export default function AdminPage() {
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               {numField('deposit_percent', 'Tỷ lệ đặt cọc', 'Áp dụng cho đơn tạo sau khi lưu.', '%')}
-              {numField('service_fee', 'Phí dịch vụ / đơn hoàn tất', 'Chỉ ghi nhận khi đơn hoàn tất.', '₫')}
-              {numField('unlock_fee_customer', 'Phí mở thông tin — khách', undefined, '₫')}
-              {numField('unlock_fee_shop', 'Phí mở thông tin — shop', undefined, '₫')}
+              {numField('service_fee', 'Phí nền tảng / đơn (shop trả)', 'Thu trước khi mở liên hệ. Lưu theo từng đơn lúc khách chốt.', '₫')}
+              {numField('condition_review_hours', 'Thời gian xem xét điều kiện', 'Quá hạn chỉ hiện nhắc trong mục Chờ xác minh.', 'giờ')}
               {numField('guest_quota', 'Số đơn xem được khi chưa đăng nhập')}
               {numField('member_quota', 'Số đơn xem được khi đã đăng nhập')}
             </div>
+            <p className="text-xs text-slate-500">
+              Phí mở thông tin cũ (khách / shop trả riêng) đã ngừng dùng: liên hệ giờ chỉ mở khi đơn đủ cọc + phí nền tảng.
+            </p>
             <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
               VD: đơn {formatVnd(600000)} với cọc {settings.deposit_percent}% → cọc {formatVnd(Math.round((600000 * settings.deposit_percent) / 100))}.
             </p>
@@ -407,9 +460,10 @@ export default function AdminPage() {
                 {log.map((l) => (
                   <li key={l.id} className="py-2.5">
                     <p className="font-semibold">
-                      {l.action === 'update_settings' ? '⚙️ Đổi cấu hình' : l.action === 'resolve_dispute' ? '⚖️ Xử lý khiếu nại' : l.action === 'withdraw_bid' ? '🗑️ Gỡ báo giá' : l.action}
+                      {LOG_LABEL[l.action] ?? l.action}
                       <span className="font-normal text-slate-500"> · {timeAgo(l.created_at)}</span>
                     </p>
+                    {l.target && <p className="font-mono text-xs text-slate-500">{l.target.slice(0, 8).toUpperCase()}</p>}
                     {'note' in l.details && <p className="text-slate-600">{String(l.details.note)}</p>}
                   </li>
                 ))}
@@ -421,6 +475,16 @@ export default function AdminPage() {
     </div>
   );
 }
+
+const LOG_LABEL: Record<string, string> = {
+  update_settings: '⚙️ Đổi cấu hình',
+  resolve_dispute: '⚖️ Xử lý khiếu nại',
+  withdraw_bid: '🗑️ Gỡ báo giá',
+  set_condition: '🛠️ Admin đổi điều kiện cọc / phí',
+  demo_verify_deposit: '🧪 Xác nhận cọc (mô phỏng)',
+  demo_pay_platform_fee: '🧪 Phí nền tảng (mô phỏng)',
+  contact_unlock: '🔓 Mở liên hệ',
+};
 
 function AdminOrderList({ orders, empty }: { orders: AdminOrder[]; empty: string }) {
   if (orders.length === 0) return <p className="card p-6 text-sm text-slate-500">{empty}</p>;
@@ -447,6 +511,21 @@ function AdminOrderList({ orders, empty }: { orders: AdminOrder[]; empty: string
               {o.payment_mode === 'demo' && <DemoBadge />}
               {o.open_dispute && <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">Khiếu nại đang mở</span>}
             </div>
+            {o.deposit_status && o.platform_fee_status && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className={`rounded-full px-2 py-0.5 font-semibold ${DEPOSIT_STATUS[o.deposit_status]?.cls ?? ''}`}>
+                  Cọc: {DEPOSIT_STATUS[o.deposit_status]?.label ?? o.deposit_status}
+                  {o.evidence_count ? ` · ${o.evidence_count} ảnh` : ''}
+                </span>
+                <span className={`rounded-full px-2 py-0.5 font-semibold ${FEE_STATUS[o.platform_fee_status]?.cls ?? ''}`}>
+                  Phí {formatVnd(o.platform_fee_amount ?? 0)}: {FEE_STATUS[o.platform_fee_status]?.label ?? o.platform_fee_status}
+                </span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                  {o.contact_unlocked_at ? '🔓 Đã mở liên hệ' : '🔒 Chưa mở liên hệ'}
+                </span>
+                {o.needs_attention && <span className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-800">⏰ Quá hạn xem xét</span>}
+              </div>
+            )}
             {o.deposit_note && <p className="mt-2 text-xs text-amber-800">💬 {o.deposit_note}</p>}
           </Link>
         </li>

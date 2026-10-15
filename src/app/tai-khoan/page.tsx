@@ -113,7 +113,7 @@ export default function AccountPage() {
             <h2 className="text-lg font-bold">Thông tin shop</h2>
             <p className="text-xs text-slate-500">
               🔒 Khách hàng chỉ thấy quận/huyện và điểm đánh giá. Tên, số điện thoại, địa chỉ chỉ hiện khi khách đã chọn shop
-              bạn và thanh toán qua QR.
+              bạn, cọc đã được xác nhận và bạn đã trả phí nền tảng (hiện là mô phỏng).
             </p>
             {shop ? (
               <>

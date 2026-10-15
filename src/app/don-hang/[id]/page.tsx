@@ -5,12 +5,12 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import NotConfigured from '@/components/NotConfigured';
 import QuoteBreakdown from '@/components/market/QuoteBreakdown';
-import DepositDemo from '@/components/orders/DepositDemo';
 import DisputePanel from '@/components/orders/DisputePanel';
 import { OrderStatusBadge } from '@/components/orders/OrderBadges';
+import UnlockConditions from '@/components/orders/UnlockConditions';
 import ContactUnlock from '@/components/payment/ContactUnlock';
 import { DemoBadge } from '@/components/payment/PaymentQR';
-import { errMsg, formatDate, formatVnd, timeAgo } from '@/lib/format';
+import { errMsg, formatDate, timeAgo } from '@/lib/format';
 import { ORDER_STATUS, ORDER_STEPS, ROLE_LABEL, orderActions, type OrderAction, type OrderRole } from '@/lib/orders';
 import { createClient, supabaseConfigured } from '@/lib/supabase/client';
 import { useProfile } from '@/lib/useProfile';
@@ -189,6 +189,11 @@ export default function OrderPage() {
             ))}
           </div>
         )}
+        {order.status === 'pending_confirmation' && !order.contact_unlocked_at && role !== 'customer' && (
+          <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-slate-700">
+            ⏳ Xác nhận đơn được sau khi đủ 2 điều kiện mở liên hệ (cọc + phí nền tảng).
+          </p>
+        )}
         {error && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       </section>
 
@@ -228,8 +233,14 @@ export default function OrderPage() {
                   <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full bg-blue-500" aria-hidden />
                   <p className="font-semibold text-slate-700">
                     {e.kind === 'payment'
-                      ? '💳 Thanh toán'
-                      : e.to_status
+                      ? '💳 Cọc'
+                      : e.kind === 'evidence'
+                        ? '📸 Bằng chứng cọc'
+                        : e.kind === 'platform_fee'
+                          ? '🧾 Phí nền tảng'
+                          : e.kind === 'unlock'
+                            ? '🔓 Mở liên hệ'
+                            : e.to_status
                         ? `${ORDER_STATUS[e.to_status as OrderStatus]?.icon ?? ''} ${ORDER_STATUS[e.to_status as OrderStatus]?.label ?? e.to_status}`
                         : 'Cập nhật'}
                     <span className="font-normal text-slate-500"> · {ROLE_LABEL[e.actor_role]} · {timeAgo(e.created_at)}</span>
@@ -242,14 +253,7 @@ export default function OrderPage() {
         </div>
 
         <aside className="space-y-5">
-          <DepositDemo order={order} role={role} demoEnabled={demoEnabled} onChange={load} />
-
-          {order.fee_recorded_at && (
-            <p className="card p-4 text-sm text-slate-600">
-              Phí dịch vụ nền tảng ghi nhận khi hoàn tất: <b>{formatVnd(order.service_fee)}</b>
-              {isDemo && ' (số liệu MÔ PHỎNG, không thu tiền thật)'}
-            </p>
-          )}
+          <UnlockConditions order={order} role={role} userId={user.id} demoEnabled={demoEnabled} onChange={load} />
 
           {(role === 'customer' || role === 'shop') && (
             <section className="card p-5">

@@ -1,7 +1,7 @@
 import { formatVnd } from '@/lib/format';
 
 /** Câu cảnh báo bắt buộc hiện cạnh mọi mã QR. */
-export const QR_DEMO_WARNING = 'QR DEMO – Chỉ dùng để thử nghiệm. Không chuyển tiền thật.';
+export const QR_DEMO_WARNING = 'DEMO QR — KHÔNG CHUYỂN TIỀN THẬT (DO NOT TRANSFER REAL MONEY)';
 
 export function DemoBadge({ className = '' }: { className?: string }) {
   return (
@@ -72,7 +72,7 @@ function DemoQrArt({ reference }: { reference: string }) {
 type Props = {
   amount: number;
   reference: string;
-  /** VD: "Tiền đặt cọc", "Phí mở thông tin" */
+  /** VD: "Tiền cọc cho shop", "Phí nền tảng Flomal" */
   purpose?: string;
 };
 
@@ -105,8 +105,8 @@ export default function PaymentQR({ amount, reference, purpose = 'Số tiền' }
           <dd className="font-mono font-bold tracking-wider text-slate-600">{reference}</dd>
         </div>
         <p className="text-xs text-slate-500">
-          Đây là hình minh hoạ, không quét được và không gắn với tài khoản ngân hàng nào. Dùng nút “Mô phỏng thanh toán thành
-          công” để thử bước tiếp theo.
+          Đây là hình minh hoạ, không quét được và không gắn với tài khoản ngân hàng nào. Xem hay quét hình này không xác nhận
+          gì cả — dùng nút mô phỏng bên dưới để thử bước tiếp theo.
         </p>
       </dl>
     </div>

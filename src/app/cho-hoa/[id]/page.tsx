@@ -274,7 +274,7 @@ export default function RequestDetailPage() {
 
                       {b.status === 'accepted' && orderId && (
                         <Link href={`/don-hang/${orderId}`} className="btn-primary mt-3 w-full">
-                          📋 Xem đơn hàng & đặt cọc (demo)
+                          📋 Xem đơn hàng: cọc & phí nền tảng (demo)
                         </Link>
                       )}
                       {b.status === 'accepted' && isOwner && <ContactUnlock requestId={req.id} viewerRole="customer" />}

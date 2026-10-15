@@ -4,9 +4,9 @@ Sàn hoa tươi với 2 tính năng chính:
 
 1. **Thiết kế bó hoa 3D** (`/thiet-ke`) — kéo-thả hoa vào bó, chọn giấy gói, kiểu gói, ruy băng; xoay 360° để ngắm; giá cập nhật ngay. Bấm vào một bông để chọn rồi kéo đổi vị trí (chạy cả trên điện thoại), nâng/hạ, trả về vị trí gốc hoặc bỏ riêng bông đó; vị trí được lưu trong bản nháp và hiện trong ảnh chụp bó hoa.
 2. **Chợ hoa** (`/cho-hoa`) — khách đăng mô tả + ảnh (hoặc thiết kế 3D) → các shop hoa báo giá (ẩn danh: *Shop A, Shop B…*), có thể hạ giá để cạnh tranh → khách chấp nhận / từ chối. Báo giá mới hiện ngay (Supabase Realtime).
-3. **Giữ kín thông tin** — khách và shop không thấy tên / SĐT / địa chỉ của nhau. Sau khi chốt báo giá, mỗi bên **quét QR thanh toán** để mở thông tin liên hệ của bên kia.
+3. **Giữ kín thông tin** — khách và shop không thấy tên / SĐT / địa chỉ / link Zalo-Facebook của nhau. Liên hệ chỉ mở khi đơn đủ **2 điều kiện**: (A) **cọc** — khách chuyển cọc cho shop, shop gửi ảnh bằng chứng và xác nhận; (B) **phí nền tảng** 50.000 ₫/đơn do shop trả. Thiếu, bị từ chối hoặc đang tranh chấp một điều kiện thì vẫn khoá. Quy tắc nằm trong database (`try_unlock_contact`), không dựa vào giao diện.
 4. **Mẫu đã lưu** (`/mau-da-luu`) — chưa đăng nhập vẫn thiết kế và lưu mẫu trên trình duyệt; đăng nhập để đăng lên Chợ hoa.
-5. **Đơn hàng** (`/don-hang/<id>`) — khách chấp nhận báo giá → đơn hàng (lưu nguyên báo giá đã chốt) → đặt cọc **DEMO** → shop xác nhận, chuẩn bị, giao → khách xác nhận hoàn tất. Có lịch sử trạng thái và khiếu nại kèm ảnh bằng chứng.
+5. **Đơn hàng** (`/don-hang/<id>`) — khách chấp nhận báo giá → đơn hàng (lưu nguyên báo giá đã chốt) → cọc + phí nền tảng **DEMO** → mở liên hệ → shop xác nhận, chuẩn bị, giao → khách xác nhận hoàn tất. Mở liên hệ không có nghĩa đơn đã giao hay đã thanh toán đủ. Có lịch sử trạng thái và khiếu nại kèm ảnh bằng chứng.
 6. **Quản trị** (`/quan-tri`) — tổng quan, đơn hàng, khiếu nại, yêu cầu & báo giá, người dùng, cấu hình (tỷ lệ cọc, phí dịch vụ, bật/tắt demo), nhật ký thay đổi.
 
 > ⚠️ **Thanh toán hiện CHỈ LÀ DEMO.** Mã QR là hình minh hoạ không quét được, không gắn tài khoản ngân hàng nào. Mọi khoản cọc, phí dịch vụ, hoàn tiền đều là số liệu mô phỏng (`payment_mode = 'demo'`, `paid_via = 'demo'`) và không được tính là doanh thu thật.
@@ -33,6 +33,7 @@ npm run dev                   # http://localhost:3000
    - `supabase/seed.sql` — danh mục hoa / giấy gói / kiểu gói mẫu
    - `supabase/migrations/0002_privacy_unlock_quota.sql` — ẩn thông tin, mở khoá bằng QR, giới hạn số đơn được xem
    - `supabase/migrations/0003_orders_demo_payment_admin.sql` — đơn hàng, đặt cọc demo, khiếu nại, quản trị viên, báo giá chi tiết
+   - `supabase/migrations/0004_dual_unlock.sql` — mở liên hệ theo 2 điều kiện (cọc + phí nền tảng), ảnh bằng chứng cọc riêng tư, hàng chờ xác minh cho admin
 3. **Project Settings → API**: copy `Project URL` và `anon public key` vào `.env.local`.
 4. **Authentication → URL Configuration**:
    - Site URL: `https://<tên-miền-vercel-của-bạn>`

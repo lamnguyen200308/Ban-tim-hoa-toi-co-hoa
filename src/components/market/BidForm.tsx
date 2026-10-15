@@ -191,7 +191,7 @@ export default function BidForm({ requestId, shopId, myBid, lowest, onDone }: Pr
           id="msg"
           className="input min-h-[70px]"
           maxLength={2000}
-          placeholder="Không ghi SĐT / email — khách thấy liên hệ sau khi thanh toán"
+          placeholder="Không ghi SĐT / email / link Zalo — liên hệ mở khi đơn đủ cọc + phí nền tảng"
           value={f.message}
           onChange={set('message')}
         />

@@ -177,6 +177,8 @@ export type AppSettings = {
   payment_demo: boolean;
   deposit_percent: number;
   service_fee: number;
+  /** Số giờ trước khi nhắc admin xem đơn đang kẹt điều kiện (không tự xử lý gì). */
+  condition_review_hours?: number;
 };
 
 export type OrderStatus =
@@ -213,12 +215,49 @@ export type Order = {
   fee_recorded_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Còn lại dự kiến = tổng − cọc (cột tính sẵn trong database). */
+  remaining_amount: number;
+  /** Điều kiện A — Cọc. */
+  deposit_status: DepositStatus;
+  deposit_customer_marked_at: string | null;
+  deposit_evidence_at: string | null;
+  deposit_verified_at: string | null;
+  deposit_verification_method: 'demo_shop' | 'demo_admin' | 'legacy_demo' | 'reconciliation' | null;
+  deposit_status_note: string | null;
+  /** Điều kiện B — Phí nền tảng (shop trả). */
+  platform_fee_amount: number | null;
+  platform_fee_mode: 'demo' | 'live' | null;
+  platform_fee_status: PlatformFeeStatus;
+  platform_fee_verified_at: string | null;
+  platform_fee_verification_method: 'demo_simulation' | 'demo_admin' | 'legacy_completion' | 'gateway' | null;
+  platform_fee_note: string | null;
+  /** Chỉ có giá trị khi CẢ HAI điều kiện hợp lệ. */
+  contact_unlocked_at: string | null;
+  contact_unlock_trigger: string | null;
+};
+
+/** *_demo = đã MÔ PHỎNG, không phải đã nhận tiền thật. 'verified' chỉ dành cho đối soát thật sau này. */
+export type DepositStatus = 'pending' | 'pending_verification' | 'verified_demo' | 'verified' | 'rejected' | 'disputed';
+export type PlatformFeeStatus = 'pending' | 'verified_demo' | 'verified' | 'rejected' | 'disputed';
+
+export type DepositEvidence = {
+  id: string;
+  order_id: string;
+  uploaded_by: string | null;
+  uploader_role: 'shop';
+  storage_path: string;
+  evidence_type: 'deposit_screenshot';
+  is_demo: boolean;
+  note: string | null;
+  status: 'submitted' | 'accepted' | 'rejected';
+  reviewed_at: string | null;
+  created_at: string;
 };
 
 export type OrderEvent = {
   id: number;
   order_id: string;
-  kind: 'status' | 'payment' | 'dispute';
+  kind: 'status' | 'payment' | 'dispute' | 'evidence' | 'platform_fee' | 'unlock';
   from_status: string | null;
   to_status: string | null;
   actor_role: 'customer' | 'shop' | 'admin' | 'system';
@@ -231,6 +270,8 @@ export type Dispute = {
   order_id: string;
   opener_role: 'customer' | 'shop';
   reason: string;
+  /** Khiếu nại gắn với một điều kiện mở liên hệ (nếu có). */
+  condition?: 'deposit' | 'platform_fee' | null;
   status: 'open' | 'resolved';
   outcome: 'completed' | 'cancelled' | 'resume' | null;
   deposit_decision: 'refund_customer' | 'release_shop' | 'split' | 'none' | null;

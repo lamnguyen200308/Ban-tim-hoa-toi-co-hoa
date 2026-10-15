@@ -1,4 +1,32 @@
-import type { Order, OrderStatus, PaymentStatus } from '@/lib/types';
+import type { DepositStatus, Order, OrderStatus, PaymentStatus, PlatformFeeStatus } from '@/lib/types';
+
+type CondLabel = { label: string; icon: string; cls: string };
+
+/** Điều kiện A — Cọc. Nhãn luôn ghi rõ MÔ PHỎNG với trạng thái demo. */
+export const DEPOSIT_STATUS: Record<DepositStatus, CondLabel> = {
+  pending: { label: 'Chưa có bằng chứng cọc', icon: '⏳', cls: 'bg-slate-100 text-slate-700' },
+  pending_verification: { label: 'Đã gửi bằng chứng — chờ xác minh', icon: '🔎', cls: 'bg-blue-100 text-blue-800' },
+  verified_demo: { label: 'Đã xác nhận (MÔ PHỎNG)', icon: '🧪', cls: 'bg-amber-100 text-amber-900' },
+  verified: { label: 'Đã xác minh', icon: '✅', cls: 'bg-emerald-100 text-emerald-800' },
+  rejected: { label: 'Bị từ chối', icon: '✖️', cls: 'bg-red-100 text-red-800' },
+  disputed: { label: 'Đang tranh chấp', icon: '⚖️', cls: 'bg-red-100 text-red-800' },
+};
+
+/** Điều kiện B — Phí nền tảng. */
+export const FEE_STATUS: Record<PlatformFeeStatus, CondLabel> = {
+  pending: { label: 'Chưa thanh toán', icon: '⏳', cls: 'bg-slate-100 text-slate-700' },
+  verified_demo: { label: 'Đã thanh toán (MÔ PHỎNG)', icon: '🧪', cls: 'bg-amber-100 text-amber-900' },
+  verified: { label: 'Đã thanh toán', icon: '✅', cls: 'bg-emerald-100 text-emerald-800' },
+  rejected: { label: 'Bị từ chối', icon: '✖️', cls: 'bg-red-100 text-red-800' },
+  disputed: { label: 'Đang tranh chấp', icon: '⚖️', cls: 'bg-red-100 text-red-800' },
+};
+
+/** Điều kiện hợp lệ đúng theo chế độ của đơn (giống hàm condition_valid trong database — chỉ để hiển thị). */
+export function conditionValid(mode: string | null | undefined, status: string) {
+  return mode === 'demo' ? status === 'verified_demo' : mode === 'live' ? status === 'verified' : false;
+}
+
+export const BUCKET_DEPOSIT = 'deposit-evidence';
 
 /** Nhãn + màu trạng thái đơn hàng. */
 export const ORDER_STATUS: Record<OrderStatus, { label: string; icon: string; cls: string }> = {
@@ -39,21 +67,23 @@ export type OrderAction = {
  * quyền thật được kiểm tra trong hàm order_transition() ở database.
  */
 export function orderActions(o: Order, role: OrderRole): OrderAction[] {
-  const paid = o.payment_status === 'demo_paid' || o.payment_status === 'paid';
+  // Shop chỉ xác nhận đơn sau khi đã mở liên hệ (đủ cọc + phí nền tảng)
+  const unlocked = !!o.contact_unlocked_at;
   const shopSide = role === 'shop' || role === 'admin';
-  const cancelNeedsNote = o.payment_status !== 'unpaid';
+  const cancelNeedsNote =
+    o.deposit_status !== 'pending' || !!o.deposit_customer_marked_at || o.platform_fee_status !== 'pending';
   const cancel: OrderAction = {
     to: 'cancelled',
     label: 'Huỷ đơn',
     style: 'outline',
     needsNote: cancelNeedsNote,
     confirm: cancelNeedsNote
-      ? 'Huỷ đơn đã đặt cọc? Tiền cọc KHÔNG mặc định bị mất — quản trị viên sẽ xem xét.'
+      ? 'Huỷ đơn đã có bước cọc / phí? Tiền cọc KHÔNG mặc định bị mất — quản trị viên sẽ xem xét.'
       : 'Huỷ đơn này?',
   };
   switch (o.status) {
     case 'pending_confirmation':
-      return [...(shopSide && paid ? [{ to: 'confirmed' as const, label: '✅ Xác nhận đơn', style: 'primary' as const }] : []), cancel];
+      return [...(shopSide && unlocked ? [{ to: 'confirmed' as const, label: '✅ Xác nhận đơn', style: 'primary' as const }] : []), cancel];
     case 'confirmed':
       return [...(shopSide ? [{ to: 'preparing' as const, label: '💐 Bắt đầu chuẩn bị', style: 'primary' as const }] : []), cancel];
     case 'preparing':

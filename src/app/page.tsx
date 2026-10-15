@@ -23,13 +23,13 @@ type Step = { icon: LucideIcon; title: string; text: string };
 const STEPS_CUSTOMER: Step[] = [
   { icon: Box, title: 'Tự thiết kế', text: 'Chọn hoa, giấy gói, kiểu gói và ruy băng. Xoay bó hoa 3D để ngắm mọi góc.' },
   { icon: FilePlus2, title: 'Đăng yêu cầu', text: 'Đăng thiết kế hoặc ảnh mẫu kèm mô tả, ngân sách và ngày cần hoa.' },
-  { icon: BadgePercent, title: 'Chọn giá tốt nhất', text: 'Các shop ẩn danh gửi báo giá cạnh tranh. Chấp nhận rồi mở liên hệ shop.' },
+  { icon: BadgePercent, title: 'Chọn giá tốt nhất', text: 'Các shop ẩn danh gửi báo giá cạnh tranh. Chấp nhận, đặt cọc rồi mở liên hệ shop.' },
 ];
 
 const STEPS_SHOP: Step[] = [
   { icon: Search, title: 'Xem yêu cầu', text: 'Danh sách khách đang tìm hoa trong khu vực của bạn, cập nhật liên tục.' },
   { icon: Tag, title: 'Báo giá', text: 'Gửi giá và lời nhắn. Có thể hạ giá khi thấy đối thủ báo thấp hơn.' },
-  { icon: Handshake, title: 'Chốt đơn', text: 'Được chấp nhận → mở thông tin liên hệ của khách và bắt đầu chuẩn bị.' },
+  { icon: Handshake, title: 'Chốt đơn', text: 'Được chấp nhận → xác nhận cọc, trả phí nền tảng → mở liên hệ khách và bắt đầu chuẩn bị.' },
 ];
 
 const FEATURES: (Step & { span?: string })[] = [
